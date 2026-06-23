@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+meetlink-api/client
+screens
+**/.env
+**/.git
+**/.DS_Store
+**/*.log
