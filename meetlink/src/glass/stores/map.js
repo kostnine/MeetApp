@@ -100,6 +100,7 @@ function mapServerStory(row, index) {
     text: row.text,
     image: row.image || null,
     avatar: row.avatar || null,
+    nickname: row.nickname || null,
     size: layout.size,
     ...storyLatLng(layout.distanceM, index),
   }

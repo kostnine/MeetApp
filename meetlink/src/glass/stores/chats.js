@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiFetch, authHeaders } from '../api'
+import { useAuthStore } from './auth'
 
 const SKINS = {
   violet: 'linear-gradient(135deg,#8b7cf6,#6d5de0)',
@@ -26,16 +27,33 @@ function mapSource(source) {
   return source === 'request' ? 'request' : 'story'
 }
 
+// Which side of the conversation the logged-in user is on.
+function viewerSide(row) {
+  const myId = useAuthStore().user?.profileId
+  if (myId && row.guest_profile_id === myId) return 'guest'
+  return 'owner'
+}
+
+// The OTHER person (name + online), from the viewer's perspective.
+function counterpart(row, side) {
+  return side === 'owner'
+    ? { name: row.guest_name || row.guest_nickname || 'Someone', online: row.guest_status === 'online' }
+    : { name: row.owner_name || row.owner_nickname || 'Someone', online: row.owner_status === 'online' }
+}
+
 function mapConversation(row, index) {
+  const side = viewerSide(row)
+  const other = counterpart(row, side)
   return {
     id: row.id,
     remote: true,
-    name: row.guest_nickname || 'Guest',
-    mono: mono(row.guest_nickname),
+    side,
+    name: other.name,
+    mono: mono(other.name),
     gradient: SKIN_LIST[index % SKIN_LIST.length],
-    online: false,
+    online: other.online,
     source: mapSource(row.source),
-    unread: row.last_sender && row.last_sender !== 'owner' ? 1 : 0,
+    unread: row.last_sender && row.last_sender !== side ? 1 : 0,
     blocked: !!row.blocked,
     lastMessage: row.last_message || '',
     messages: [],
@@ -43,8 +61,9 @@ function mapConversation(row, index) {
   }
 }
 
-function mapMessage(row) {
-  return { id: row.id, sender: row.sender === 'owner' ? 'me' : 'them', text: row.body }
+// A message is "me" when its sender matches the viewer's side of the conversation.
+function mapMessage(row, side = 'owner') {
+  return { id: row.id, sender: row.sender === side ? 'me' : 'them', text: row.body }
 }
 
 const SEED = [
@@ -147,7 +166,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (conversation.remote && !conversation.loaded) {
       try {
         const data = await apiFetch(`/messages/conversations/${id}`, { headers: authHeaders() })
-        conversation.messages = (data.messages || []).map(mapMessage)
+        conversation.messages = (data.messages || []).map((m) => mapMessage(m, conversation.side))
         conversation.loaded = true
       } catch {
         // leave messages empty on failure
@@ -177,13 +196,19 @@ export const useChatsStore = defineStore('chats', () => {
         const created = await apiFetch('/messages/conversations', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ guestNickname: conversation.name, source: 'map', sender: 'owner', body: text }),
+          body: JSON.stringify({
+            guestNickname: conversation.nickname || conversation.name,
+            source: 'map',
+            sender: 'owner',
+            body: text,
+          }),
         })
         conversation.id = created.id
         conversation.remote = true
         conversation.loaded = true
+        conversation.side = 'owner'
         conversation.source = mapSource(created.source)
-        const serverMsgs = (created.messages || []).map(mapMessage)
+        const serverMsgs = (created.messages || []).map((m) => mapMessage(m, 'owner'))
         if (serverMsgs.length) conversation.messages = serverMsgs
         if (activeId.value !== created.id) activeId.value = created.id
       } catch {
@@ -196,13 +221,13 @@ export const useChatsStore = defineStore('chats', () => {
       const created = await apiFetch(`/messages/conversations/${conversation.id}/messages`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ sender: 'owner', body: text }),
+        body: JSON.stringify({ sender: conversation.side || 'owner', body: text }),
       })
       const index = conversation.messages.indexOf(local)
       if (index !== -1) {
         // The socket echo may have already added the server message — avoid a duplicate.
         if (conversation.messages.some((m) => m.id === created.id)) conversation.messages.splice(index, 1)
-        else conversation.messages.splice(index, 1, mapMessage(created))
+        else conversation.messages.splice(index, 1, mapMessage(created, conversation.side))
       }
     } catch {
       // keep the optimistic message if the send fails
@@ -219,7 +244,7 @@ export const useChatsStore = defineStore('chats', () => {
       load() // unknown conversation — refresh the list
       return
     }
-    const msg = mapMessage(raw)
+    const msg = mapMessage(raw, conversation.side)
     conversation.lastMessage = msg.text
     if (conversation.loaded && !conversation.messages.some((m) => m.id === msg.id)) {
       conversation.messages.push(msg)
@@ -231,15 +256,18 @@ export const useChatsStore = defineStore('chats', () => {
 
   function receiveConversation(row) {
     if (!row?.id || conversations.value.some((c) => c.id === row.id)) return
-    const messages = (row.messages || []).map(mapMessage)
+    const side = viewerSide(row)
+    const other = counterpart(row, side)
+    const messages = (row.messages || []).map((m) => mapMessage(m, side))
     const last = messages[messages.length - 1]
     conversations.value.unshift({
       id: row.id,
       remote: true,
-      name: row.guest_nickname || 'Guest',
-      mono: mono(row.guest_nickname),
+      side,
+      name: other.name,
+      mono: mono(other.name),
       gradient: SKIN_LIST[conversations.value.length % SKIN_LIST.length],
-      online: false,
+      online: other.online,
       source: mapSource(row.source),
       unread: last && last.sender === 'them' ? 1 : 0,
       lastMessage: last ? last.text : '',
@@ -280,7 +308,9 @@ export const useChatsStore = defineStore('chats', () => {
     }
     const conversation = {
       id: `c-${story.id}-${nextId()}`,
+      side: 'owner',
       name: story.name,
+      nickname: story.nickname || story.name,
       mono: mono(story.name),
       gradient: story.gradient,
       online: !!story.online,

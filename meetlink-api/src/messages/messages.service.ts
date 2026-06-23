@@ -12,6 +12,17 @@ export class MessagesService {
     private readonly realtime: OnlineGateway,
   ) {}
 
+  // Find the real account a guest name refers to (so the recipient sees the chat too).
+  private async resolveGuestProfile(name: string, excludeOwnerId: string) {
+    const result = await this.db.query<{ id: string }>(
+      `select id from profiles
+       where id <> $2 and (lower(nickname) = lower($1) or lower(name) = lower($1))
+       limit 1`,
+      [name, excludeOwnerId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async startConversation(dto: StartConversationDto, ownerProfileId?: string) {
     const owner = ownerProfileId
       ? await this.profiles.findById(ownerProfileId)
@@ -19,53 +30,58 @@ export class MessagesService {
       ? await this.profiles.findByNickname(dto.ownerNickname)
       : await this.profiles.findAdminProfile();
     const guestNickname = dto.guestNickname?.trim() || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+    const guestProfile = await this.resolveGuestProfile(guestNickname, owner.id);
 
     const conversationResult = await this.db.query(
-      `insert into conversations (owner_profile_id, guest_nickname, contact, source, updated_at)
-       values ($1, $2, $3, $4, now())
+      `insert into conversations (owner_profile_id, guest_nickname, guest_profile_id, contact, source, updated_at)
+       values ($1, $2, $3, $4, $5, now())
        on conflict (owner_profile_id, guest_nickname) do update
        set contact = coalesce(excluded.contact, conversations.contact),
+           guest_profile_id = coalesce(excluded.guest_profile_id, conversations.guest_profile_id),
            source = excluded.source,
            updated_at = now()
        returning *`,
-      [owner.id, guestNickname, dto.contact ?? null, dto.source ?? 'chat'],
+      [owner.id, guestNickname, guestProfile?.id ?? null, dto.contact ?? null, dto.source ?? 'chat'],
     );
 
     const conversation = conversationResult.rows[0];
-    const message = await this.addMessage(conversation.id, {
+    await this.addMessage(conversation.id, {
       sender: dto.sender ?? 'guest',
       body: dto.body,
     });
 
-    const created = {
-      ...conversation,
-      messages: [message],
-    };
+    // Broadcast + return a fully-joined conversation so BOTH clients can render names.
+    const full = await this.getConversation(conversation.id);
+    this.realtime.emitConversation(full);
 
-    this.realtime.emitConversation(created);
-
-    return created;
+    return full;
   }
 
-  async listConversations(ownerProfileId?: string) {
+  async listConversations(viewerProfileId?: string) {
     const params: unknown[] = [];
     let where = '';
 
-    if (ownerProfileId) {
-      params.push(ownerProfileId);
-      where = 'where c.owner_profile_id = $1';
+    if (viewerProfileId) {
+      params.push(viewerProfileId);
+      // The viewer may be the owner OR the linked recipient.
+      where = 'where (c.owner_profile_id = $1 or c.guest_profile_id = $1)';
     }
 
     const result = await this.db.query(
       `select
          c.*,
-         p.nickname as owner_nickname,
+         op.nickname as owner_nickname,
+         op.name as owner_name,
+         op.status as owner_status,
+         gp.name as guest_name,
+         gp.status as guest_status,
          last_message.body as last_message,
          last_message.sender as last_sender,
          last_message.created_at as last_message_at,
          coalesce(message_counts.total, 0)::int as message_count
        from conversations c
-       join profiles p on p.id = c.owner_profile_id
+       join profiles op on op.id = c.owner_profile_id
+       left join profiles gp on gp.id = c.guest_profile_id
        left join lateral (
          select body, sender, created_at
          from messages m
@@ -86,21 +102,23 @@ export class MessagesService {
     return result.rows;
   }
 
-  async getConversation(id: string, ownerProfileId?: string) {
+  async getConversation(id: string, viewerProfileId?: string) {
     const params: unknown[] = [id];
-    let ownerWhere = '';
+    let viewerWhere = '';
 
-    if (ownerProfileId) {
-      params.push(ownerProfileId);
-      ownerWhere = 'and c.owner_profile_id = $2';
+    if (viewerProfileId) {
+      params.push(viewerProfileId);
+      viewerWhere = 'and (c.owner_profile_id = $2 or c.guest_profile_id = $2)';
     }
 
     const conversationResult = await this.db.query(
-      `select c.*, p.nickname as owner_nickname
+      `select c.*, op.nickname as owner_nickname, op.name as owner_name, op.status as owner_status,
+              gp.name as guest_name, gp.status as guest_status
        from conversations c
-       join profiles p on p.id = c.owner_profile_id
+       join profiles op on op.id = c.owner_profile_id
+       left join profiles gp on gp.id = c.guest_profile_id
        where c.id = $1
-       ${ownerWhere}`,
+       ${viewerWhere}`,
       params,
     );
 
@@ -124,18 +142,18 @@ export class MessagesService {
 
   async addMessage(conversationId: string, dto: SendMessageDto, ownerProfileId?: string) {
     const params: unknown[] = [conversationId];
-    let ownerWhere = '';
+    let viewerWhere = '';
 
     if (ownerProfileId) {
       params.push(ownerProfileId);
-      ownerWhere = 'and owner_profile_id = $2';
+      viewerWhere = 'and (owner_profile_id = $2 or guest_profile_id = $2)';
     }
 
     const conversation = await this.db.query(
       `select id, blocked
        from conversations
        where id = $1
-       ${ownerWhere}`,
+       ${viewerWhere}`,
       params,
     );
 
@@ -173,11 +191,11 @@ export class MessagesService {
 
   async setBlocked(conversationId: string, blocked: boolean, ownerProfileId?: string) {
     const params: unknown[] = [conversationId, blocked];
-    let ownerWhere = '';
+    let viewerWhere = '';
 
     if (ownerProfileId) {
       params.push(ownerProfileId);
-      ownerWhere = 'and owner_profile_id = $3';
+      viewerWhere = 'and (owner_profile_id = $3 or guest_profile_id = $3)';
     }
 
     const result = await this.db.query(
@@ -186,7 +204,7 @@ export class MessagesService {
            blocked_at = case when $2 then now() else null end,
            updated_at = now()
        where id = $1
-       ${ownerWhere}
+       ${viewerWhere}
        returning *`,
       params,
     );

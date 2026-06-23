@@ -20,6 +20,7 @@ function mapStory(row: Record<string, any>) {
     expiresAt: row.expires_at,
     image: row.image_url ?? null,
     name: row.owner_name || row.owner_nickname || 'Someone',
+    nickname: row.owner_nickname ?? null,
     age: row.owner_age ?? null,
     avatar: row.owner_avatar ?? null,
     online: row.owner_status === 'online',

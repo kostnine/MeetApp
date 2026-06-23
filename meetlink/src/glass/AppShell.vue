@@ -5,6 +5,7 @@ import { Map as MapIcon, QrCode, MessageCircle, UserRound, Settings } from '@luc
 import { useUiStore } from './stores/ui'
 import { useMeStore } from './stores/me'
 import { useRequestsStore } from './stores/requests'
+import { useChatsStore } from './stores/chats'
 import { useAuthStore } from './stores/auth'
 import { useMapStore } from './stores/map'
 import BrandLogo from './components/BrandLogo.vue'
@@ -16,6 +17,7 @@ import MeAvatar from './components/MeAvatar.vue'
 const ui = useUiStore()
 const me = useMeStore()
 const requests = useRequestsStore()
+const chats = useChatsStore()
 const auth = useAuthStore()
 const map = useMapStore()
 const route = useRoute()
@@ -23,7 +25,7 @@ const route = useRoute()
 const navItems = computed(() => [
   { name: 'map', label: 'Map', icon: MapIcon },
   { name: 'requests', label: 'Requests', icon: QrCode, badge: requests.newCount },
-  { name: 'chats', label: 'Chats', icon: MessageCircle },
+  { name: 'chats', label: 'Chats', icon: MessageCircle, badge: chats.unreadTotal },
   { name: 'profile', label: 'Profile', icon: UserRound },
   { name: 'settings', label: 'Settings', icon: Settings, desktopOnly: true },
 ])

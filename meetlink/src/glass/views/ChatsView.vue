@@ -9,8 +9,8 @@ const ui = useUiStore()
 
 const chatTabs = [
   { key: 'all', label: 'All' },
-  { key: 'stories', label: 'From stories' },
-  { key: 'requests', label: 'From requests' },
+  { key: 'stories', label: 'Stories' },
+  { key: 'requests', label: 'Requests' },
   { key: 'unread', label: 'Unread' },
 ]
 
