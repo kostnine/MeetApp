@@ -82,13 +82,38 @@ function onFile(event) {
     ui.showToast('Please choose an image file')
     return
   }
-  if (file.size > 5_000_000) {
-    ui.showToast('Image is too large — pick one under 5 MB')
+  if (file.size > 25_000_000) {
+    ui.showToast('That image is too large')
     return
   }
   const reader = new FileReader()
   reader.onload = () => {
-    form.image = String(reader.result || '')
+    const src = String(reader.result || '')
+    // Downscale + recompress so a full-res phone photo doesn't exceed the API limit.
+    const img = new Image()
+    img.onload = () => {
+      const max = 1280
+      let w = img.width
+      let h = img.height
+      if (Math.max(w, h) > max) {
+        const scale = max / Math.max(w, h)
+        w = Math.round(w * scale)
+        h = Math.round(h * scale)
+      }
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        form.image = canvas.toDataURL('image/jpeg', 0.82)
+      } catch {
+        form.image = src // canvas failed — fall back to the original
+      }
+    }
+    img.onerror = () => {
+      form.image = src // undecodable (e.g. some HEIC) — send the original
+    }
+    img.src = src
   }
   reader.readAsDataURL(file)
 }

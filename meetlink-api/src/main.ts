@@ -16,8 +16,8 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  app.use(json({ limit: '8mb' }));
-  app.use(urlencoded({ limit: '8mb', extended: true }));
+  app.use(json({ limit: '12mb' }));
+  app.use(urlencoded({ limit: '12mb', extended: true }));
 
   app.enableCors({
     origin: (

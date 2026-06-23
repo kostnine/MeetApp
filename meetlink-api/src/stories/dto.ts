@@ -22,6 +22,6 @@ export class CreateStoryDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(3_000_000)
+  @MaxLength(8_000_000)
   imageUrl?: string;
 }
