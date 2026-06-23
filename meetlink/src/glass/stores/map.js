@@ -17,7 +17,11 @@ export const RADIUS_OPTIONS = [
   { meters: 500, label: '500 m', inner: 150, outer: 240 },
   { meters: 1000, label: '1 km', inner: 210, outer: 320 },
   { meters: 2000, label: '2 km', inner: 280, outer: 430 },
+  { meters: 6000, label: 'City', inner: 320, outer: 480 },
 ]
+
+// Anything beyond the close radii is treated as the city-wide view.
+export const CITY_METERS = 6000
 
 function mono(name) {
   return String(name || '?').trim().slice(0, 1).toUpperCase()
@@ -139,10 +143,12 @@ export const useMapStore = defineStore('map', () => {
   )
   const radiusLabel = computed(() => radiusInfo.value.label)
 
-  // Only stories within the chosen radius and not hidden.
+  // Stories within the chosen radius (or everyone, in the city view) and not hidden.
   const visibleStories = computed(() =>
     stories.value.filter(
-      (story) => story.distanceM <= radius.value && !hiddenIds.value.includes(story.id),
+      (story) =>
+        (radius.value >= CITY_METERS || story.distanceM <= radius.value) &&
+        !hiddenIds.value.includes(story.id),
     ),
   )
   const nearbyCount = computed(() => visibleStories.value.length)

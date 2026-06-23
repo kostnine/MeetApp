@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useMapStore, MAP_CENTER } from '../stores/map'
+import { useMapStore, MAP_CENTER, CITY_METERS } from '../stores/map'
 import { useMeStore } from '../stores/me'
 
 const emit = defineEmits(['open-story', 'post-story', 'locate', 'open-my-story'])
@@ -42,11 +42,13 @@ function storyIcon(story) {
 function renderStories() {
   storyLayer.clearLayers()
   // Stories are laid out around the default centre; shift them to the current centre.
-  const dLat = map.center.lat - MAP_CENTER.lat
-  const dLng = map.center.lng - MAP_CENTER.lng
+  // In the city view, amplify the spread so people fan out across the whole map.
+  const amp = map.radius >= CITY_METERS ? 5 : 1
   for (const story of map.visibleStories) {
     if (typeof story.lat !== 'number') continue
-    L.marker([story.lat + dLat, story.lng + dLng], { icon: storyIcon(story), keyboard: false })
+    const lat = map.center.lat + (story.lat - MAP_CENTER.lat) * amp
+    const lng = map.center.lng + (story.lng - MAP_CENTER.lng) * amp
+    L.marker([lat, lng], { icon: storyIcon(story), keyboard: false })
       .on('click', () => emit('open-story', story))
       .addTo(storyLayer)
   }
@@ -57,7 +59,7 @@ function applyRadius(fit = true) {
   if (outerRing) outerRing.setRadius(meters)
   if (innerRing) innerRing.setRadius(meters / 2)
   if (fit && leaflet && outerRing) {
-    leaflet.fitBounds(outerRing.getBounds(), { padding: [40, 40], animate: true })
+    leaflet.fitBounds(outerRing.getBounds(), { padding: [40, 40], animate: false })
   }
 }
 
@@ -153,7 +155,10 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(() => map.radius, () => applyRadius(true))
+watch(() => map.radius, () => {
+  applyRadius(true)
+  renderStories() // re-spread markers when switching to/from the city view
+})
 watch(() => map.visibleStories, renderStories, { deep: true })
 watch(() => map.center, () => applyCenter(true), { deep: true })
 watch(

@@ -80,7 +80,9 @@ function locate() {
       />
 
       <aside v-if="ui.isDesktop" class="stories-panel ml-panel">
-        <div class="stories-head">Stories nearby · {{ map.nearbyCount }}</div>
+        <div class="stories-head">
+          Stories {{ map.radiusLabel === 'City' ? 'in the city' : 'nearby' }} · {{ map.nearbyCount }}
+        </div>
         <div class="stories-scroll ml-scroll">
           <button
             v-for="story in map.visibleStories"
