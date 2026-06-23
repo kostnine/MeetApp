@@ -1,10 +1,11 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateStoryDto {
+  // Optional: a story can be photo-only. The service requires text OR an image.
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(500)
-  text!: string;
+  text?: string;
 
   @IsOptional()
   @IsString()

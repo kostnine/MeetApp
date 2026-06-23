@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Image as ImageIcon, Camera, X } from '@lucide/vue'
 import { useUiStore } from '../stores/ui'
 import { useMapStore } from '../stores/map'
@@ -19,7 +19,48 @@ const form = reactive({
 const fileInput = ref(null)
 const cameraInput = ref(null)
 
+// Drag the grabber/header down to dismiss the sheet.
+const dragY = ref(0)
+const interacted = ref(false)
+let dragStartY = 0
+let dragging = false
+
+const sheetStyle = computed(() => {
+  if (dragY.value) {
+    return { animation: 'none', transform: `translateY(${dragY.value}px)`, transition: 'none' }
+  }
+  if (interacted.value) {
+    return { animation: 'none', transform: 'translateY(0)', transition: 'transform 0.25s ease' }
+  }
+  return null
+})
+
+function onDragStart(event) {
+  dragStartY = event.clientY
+  dragging = true
+  interacted.value = true
+  try {
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  } catch {
+    /* synthetic pointer */
+  }
+}
+function onDragMove(event) {
+  if (!dragging) return
+  dragY.value = Math.max(0, event.clientY - dragStartY)
+}
+function onDragEnd() {
+  if (!dragging) return
+  dragging = false
+  if (dragY.value > 120) {
+    ui.closePostStory()
+  }
+  dragY.value = 0
+}
+
 function resetForm() {
+  interacted.value = false
+  dragY.value = 0
   form.text = ''
   form.location = 'approx'
   form.duration = '1h'
@@ -80,20 +121,36 @@ const whoOpts = [
 ]
 
 async function publish() {
-  await map.publishStory(form)
+  if (!form.text.trim() && !form.image) {
+    ui.showToast('Add a photo or write something first')
+    return
+  }
+  const ok = await map.publishStory(form)
+  if (!ok) {
+    ui.showToast('Could not post your story — please try again')
+    return
+  }
   await map.load() // refresh so my new story shows up (avatar ring + "view my story")
   ui.closePostStory()
-  ui.showToast(form.text.trim() || form.image ? 'Story posted — you’re live on the map' : 'Story posted')
+  ui.showToast('Story posted — you’re live on the map')
 }
 </script>
 
 <template>
   <div v-if="ui.showPostStory" class="post-scrim" @click="ui.closePostStory()">
-    <div class="post-sheet" @click.stop>
-      <div class="grabber" />
-      <div class="post-head">
-        <div class="post-title">Post a story</div>
-        <div class="post-sub">Snap a photo or drop a note. It disappears when it expires.</div>
+    <div class="post-sheet" :style="sheetStyle" @click.stop>
+      <div
+        class="post-drag"
+        @pointerdown="onDragStart"
+        @pointermove="onDragMove"
+        @pointerup="onDragEnd"
+        @pointercancel="onDragEnd"
+      >
+        <div class="grabber" />
+        <div class="post-head">
+          <div class="post-title">Post a story</div>
+          <div class="post-sub">Snap a photo or drop a note. It disappears when it expires.</div>
+        </div>
       </div>
 
       <div class="post-body ml-scroll">
@@ -215,12 +272,20 @@ async function publish() {
   box-shadow: 0 -20px 50px rgba(96, 73, 168, 0.22);
   animation: mlUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.grabber {
+.post-drag {
   flex: none;
-  width: 40px;
-  height: 4px;
+  touch-action: none;
+  cursor: grab;
+  padding-top: 4px;
+}
+.post-drag:active {
+  cursor: grabbing;
+}
+.grabber {
+  width: 44px;
+  height: 5px;
   border-radius: 999px;
-  background: rgba(90, 70, 150, 0.2);
+  background: rgba(90, 70, 150, 0.28);
   margin: 0 auto 14px;
 }
 .post-head {

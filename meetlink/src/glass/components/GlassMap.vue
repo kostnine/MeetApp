@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { useMapStore, MAP_CENTER } from '../stores/map'
 import { useMeStore } from '../stores/me'
 
-const emit = defineEmits(['open-story', 'post-story', 'locate'])
+const emit = defineEmits(['open-story', 'post-story', 'locate', 'open-my-story'])
 
 const map = useMapStore()
 const me = useMeStore()
@@ -14,13 +14,15 @@ const mapEl = ref(null)
 let leaflet = null
 let outerRing = null
 let innerRing = null
+let youMarker = null
 const storyLayer = L.layerGroup()
 const center = [MAP_CENTER.lat, MAP_CENTER.lng]
 
-function youIcon() {
+function youIcon(hasStory) {
+  const storyClass = hasStory ? ' lf-you--story' : ''
   return L.divIcon({
     className: 'lf-icon',
-    html: '<div class="lf-you"><div class="lf-you__pulse"></div><div class="lf-you__dot"><span>YOU</span></div></div>',
+    html: `<div class="lf-you${storyClass}"><div class="lf-you__pulse"></div><div class="lf-you__dot"><span>YOU</span></div></div>`,
     iconSize: [48, 48],
     iconAnchor: [24, 24],
   })
@@ -97,7 +99,9 @@ onMounted(() => {
     interactive: false,
   }).addTo(leaflet)
 
-  L.marker(center, { icon: youIcon(), interactive: false, zIndexOffset: 1000 }).addTo(leaflet)
+  youMarker = L.marker(center, { icon: youIcon(map.hasMyStory), interactive: true, zIndexOffset: 1000 })
+    .on('click', () => emit('open-my-story'))
+    .addTo(leaflet)
   storyLayer.addTo(leaflet)
 
   renderStories()
@@ -116,6 +120,12 @@ onBeforeUnmount(() => {
 
 watch(() => map.radius, () => applyRadius(true))
 watch(() => map.visibleStories, renderStories, { deep: true })
+watch(
+  () => map.hasMyStory,
+  (has) => {
+    if (youMarker) youMarker.setIcon(youIcon(has))
+  },
+)
 </script>
 
 <template>
@@ -300,5 +310,16 @@ watch(() => map.visibleStories, renderStories, { deep: true })
   padding: 12px 24px;
   border-radius: 14px;
   box-shadow: 0 10px 24px rgba(139, 124, 246, 0.4);
+}
+
+/* On phones the centered Post-story button would cover the bottom-left pill — move it up top. */
+@media (max-width: 999px) {
+  .approx-pill {
+    top: 12px;
+    bottom: auto;
+  }
+  .map-controls {
+    bottom: 76px;
+  }
 }
 </style>

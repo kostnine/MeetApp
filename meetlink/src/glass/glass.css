@@ -220,6 +220,15 @@ body {
   color: #fff;
   letter-spacing: 0.4px;
 }
+/* "You have an active story" ring on the YOU marker (tap it to view your story). */
+.lf-you--story .lf-you__dot {
+  box-shadow:
+    0 0 0 3px #8b7cf6,
+    0 8px 20px rgba(139, 124, 246, 0.5);
+}
+.lf-you--story {
+  cursor: pointer;
+}
 
 /* Story marker */
 .lf-story {

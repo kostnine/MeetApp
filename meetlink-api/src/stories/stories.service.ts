@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { ProfilesService } from '../profiles/profiles.service';
 import { CreateStoryDto } from './dto';
@@ -76,6 +76,13 @@ export class StoriesService {
   }
 
   async create(dto: CreateStoryDto, ownerProfileId?: string) {
+    const text = dto.text?.trim() || '';
+    const image = dto.imageUrl?.trim() || null;
+    // A story needs at least a photo or some text (the column is NOT NULL → store '').
+    if (!text && !image) {
+      throw new BadRequestException('Add a photo or write something for your story');
+    }
+
     const owner = await this.profiles.findOwnProfile(ownerProfileId);
     const result = await this.db.query(
       `insert into stories (owner_profile_id, text, place, visible_for, who_can_message, expires_at, image_url)
@@ -83,12 +90,12 @@ export class StoriesService {
        returning *`,
       [
         owner.id,
-        dto.text.trim(),
+        text,
         dto.place?.trim() || null,
         dto.visibleFor || '1h',
         dto.whoCanMessage || 'everyone',
         durationToExpiry(dto.visibleFor),
-        dto.imageUrl?.trim() || null,
+        image,
       ],
     );
 

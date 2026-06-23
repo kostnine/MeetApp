@@ -19,6 +19,10 @@ function openStory(story) {
 function postStory() {
   ui.openPostStory()
 }
+function openMyStory() {
+  if (map.hasMyStory) ui.openStoryViewer(map.myStories, 0, true)
+  else ui.showToast('Post a story to share where you are')
+}
 function locate() {
   ui.showToast('Centering on your approximate location')
 }
@@ -68,7 +72,12 @@ function locate() {
 
     <!-- MAP VIEW -->
     <div v-if="map.view === 'map'" class="map-body">
-      <GlassMap @open-story="openStory" @post-story="postStory" @locate="locate" />
+      <GlassMap
+        @open-story="openStory"
+        @post-story="postStory"
+        @open-my-story="openMyStory"
+        @locate="locate"
+      />
 
       <aside v-if="ui.isDesktop" class="stories-panel ml-panel">
         <div class="stories-head">Stories nearby · {{ map.nearbyCount }}</div>
