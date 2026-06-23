@@ -147,11 +147,15 @@ export const useRequestsStore = defineStore('requests', () => {
   const draft = reactive(emptyDraft())
   const generated = ref(null)
 
+  // Use the real site origin so the QR/link opens THIS deployment's public page.
   function linkFor(code) {
-    return `${LINK_HOST}/r/${code}`
+    const host = typeof window !== 'undefined' ? window.location.host : LINK_HOST
+    return `${host}/r/${code}`
   }
   function urlFor(code) {
-    return `https://${linkFor(code)}`
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : `https://${LINK_HOST}`
+    return `${origin}/r/${code}`
   }
   function repliesFor(id) {
     return responses.value.filter((r) => r.requestId === id && r.status !== 'archived').length

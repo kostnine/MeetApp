@@ -134,8 +134,9 @@ onMounted(() => {
   width: 256px;
   align-self: stretch;
   position: sticky;
-  top: 0;
+  top: 14px;
   height: 100vh;
+  height: calc(100dvh - 28px); /* account for the 14px top/bottom margins so it doesn't overflow */
   display: flex;
   flex-direction: column;
   padding: 24px 16px 20px;

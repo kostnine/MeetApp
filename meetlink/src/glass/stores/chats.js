@@ -41,19 +41,37 @@ function counterpart(row, side) {
     : { name: row.owner_name || row.owner_nickname || 'Someone', online: row.owner_status === 'online' }
 }
 
+// My / the other person's last-read timestamps, from the viewer's perspective.
+function readTimes(row, side) {
+  return {
+    myRead: side === 'owner' ? row.owner_last_read_at : row.guest_last_read_at,
+    otherRead: side === 'owner' ? row.guest_last_read_at : row.owner_last_read_at,
+  }
+}
+
+// Unread = the last message is from the OTHER side and newer than I last read.
+function isUnread(row, side, myRead) {
+  if (!row.last_sender || row.last_sender === side) return false
+  if (!row.last_message_at) return true
+  return !myRead || new Date(row.last_message_at) > new Date(myRead)
+}
+
 function mapConversation(row, index) {
   const side = viewerSide(row)
   const other = counterpart(row, side)
+  const { myRead, otherRead } = readTimes(row, side)
   return {
     id: row.id,
     remote: true,
     side,
+    myRead,
+    otherRead,
     name: other.name,
     mono: mono(other.name),
     gradient: SKIN_LIST[index % SKIN_LIST.length],
     online: other.online,
     source: mapSource(row.source),
-    unread: row.last_sender && row.last_sender !== side ? 1 : 0,
+    unread: isUnread(row, side, myRead) ? 1 : 0,
     blocked: !!row.blocked,
     lastMessage: row.last_message || '',
     messages: [],
@@ -61,9 +79,17 @@ function mapConversation(row, index) {
   }
 }
 
-// A message is "me" when its sender matches the viewer's side of the conversation.
-function mapMessage(row, side = 'owner') {
-  return { id: row.id, sender: row.sender === side ? 'me' : 'them', text: row.body }
+// A message is "me" when its sender matches my side. My messages are "seen" once the
+// other person's last-read time is at/after when the message was sent.
+function mapMessage(row, side = 'owner', otherRead = null) {
+  const mine = row.sender === side
+  return {
+    id: row.id,
+    sender: mine ? 'me' : 'them',
+    text: row.body,
+    at: row.created_at,
+    seen: mine && !!otherRead && !!row.created_at && new Date(row.created_at) <= new Date(otherRead),
+  }
 }
 
 const SEED = [
@@ -158,19 +184,42 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
-  async function selectChat(id) {
+  async function selectChat(id, { read = true } = {}) {
     activeId.value = id
     const conversation = conversations.value.find((c) => c.id === id)
     if (!conversation) return
-    conversation.unread = 0
     if (conversation.remote && !conversation.loaded) {
       try {
         const data = await apiFetch(`/messages/conversations/${id}`, { headers: authHeaders() })
-        conversation.messages = (data.messages || []).map((m) => mapMessage(m, conversation.side))
+        conversation.otherRead = readTimes(data, conversation.side).otherRead
+        conversation.messages = (data.messages || []).map((m) =>
+          mapMessage(m, conversation.side, conversation.otherRead),
+        )
         conversation.loaded = true
       } catch {
         // leave messages empty on failure
       }
+    }
+    // Only count as read when actually viewing — not on auto-select or a background tab.
+    if (read && (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+      markRead(id)
+    }
+  }
+
+  // Mark a conversation read: clears its unread and records my last-read time.
+  async function markRead(id) {
+    const conversation = conversations.value.find((c) => c.id === id)
+    if (!conversation) return
+    conversation.unread = 0
+    if (!conversation.remote) return
+    try {
+      const data = await apiFetch(`/messages/conversations/${id}/read`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+      })
+      conversation.myRead = readTimes(data, conversation.side).myRead || new Date().toISOString()
+    } catch {
+      conversation.myRead = new Date().toISOString()
     }
   }
   function backToList() {
@@ -185,7 +234,7 @@ export const useChatsStore = defineStore('chats', () => {
     const text = draft.value.trim()
     if (!conversation || !text) return
 
-    const local = { id: nextId(), sender: 'me', text }
+    const local = { id: nextId(), sender: 'me', text, at: new Date().toISOString(), seen: false }
     conversation.messages.push(local)
     conversation.lastMessage = text
     draft.value = ''
@@ -207,8 +256,9 @@ export const useChatsStore = defineStore('chats', () => {
         conversation.remote = true
         conversation.loaded = true
         conversation.side = 'owner'
+        conversation.otherRead = readTimes(created, 'owner').otherRead
         conversation.source = mapSource(created.source)
-        const serverMsgs = (created.messages || []).map((m) => mapMessage(m, 'owner'))
+        const serverMsgs = (created.messages || []).map((m) => mapMessage(m, 'owner', conversation.otherRead))
         if (serverMsgs.length) conversation.messages = serverMsgs
         if (activeId.value !== created.id) activeId.value = created.id
       } catch {
@@ -227,7 +277,7 @@ export const useChatsStore = defineStore('chats', () => {
       if (index !== -1) {
         // The socket echo may have already added the server message — avoid a duplicate.
         if (conversation.messages.some((m) => m.id === created.id)) conversation.messages.splice(index, 1)
-        else conversation.messages.splice(index, 1, mapMessage(created, conversation.side))
+        else conversation.messages.splice(index, 1, mapMessage(created, conversation.side, conversation.otherRead))
       }
     } catch {
       // keep the optimistic message if the send fails
@@ -244,13 +294,17 @@ export const useChatsStore = defineStore('chats', () => {
       load() // unknown conversation — refresh the list
       return
     }
-    const msg = mapMessage(raw, conversation.side)
+    const msg = mapMessage(raw, conversation.side, conversation.otherRead)
     conversation.lastMessage = msg.text
     if (conversation.loaded && !conversation.messages.some((m) => m.id === msg.id)) {
       conversation.messages.push(msg)
     }
-    if (msg.sender === 'them' && activeId.value !== convId) {
-      conversation.unread = (conversation.unread || 0) + 1
+    if (msg.sender === 'them') {
+      const viewingNow =
+        activeId.value === convId &&
+        (typeof document === 'undefined' || document.visibilityState === 'visible')
+      if (viewingNow) markRead(convId)
+      else conversation.unread = (conversation.unread || 0) + 1
     }
   }
 
@@ -258,12 +312,15 @@ export const useChatsStore = defineStore('chats', () => {
     if (!row?.id || conversations.value.some((c) => c.id === row.id)) return
     const side = viewerSide(row)
     const other = counterpart(row, side)
-    const messages = (row.messages || []).map((m) => mapMessage(m, side))
+    const { myRead, otherRead } = readTimes(row, side)
+    const messages = (row.messages || []).map((m) => mapMessage(m, side, otherRead))
     const last = messages[messages.length - 1]
     conversations.value.unshift({
       id: row.id,
       remote: true,
       side,
+      myRead,
+      otherRead,
       name: other.name,
       mono: mono(other.name),
       gradient: SKIN_LIST[conversations.value.length % SKIN_LIST.length],
@@ -335,6 +392,7 @@ export const useChatsStore = defineStore('chats', () => {
     lastMessage,
     load,
     selectChat,
+    markRead,
     backToList,
     setTab,
     sendMessage,

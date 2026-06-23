@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Search, ChevronLeft, MoreHorizontal, Plus, ArrowUp, MessageSquare, MapPin, Link2 } from '@lucide/vue'
 import { useChatsStore } from '../stores/chats'
 import { useUiStore } from '../stores/ui'
@@ -28,14 +28,36 @@ const sourceText = computed(() => {
     : 'Started from a request note'
 })
 
-// On desktop keep a conversation open in the right pane.
+// On desktop keep a conversation open in the right pane — but DON'T mark it read
+// (otherwise a backgrounded/auto-selected chat would swallow the unread indicator).
 function ensureSelection() {
   if (ui.isDesktop && !chats.activeId && chats.conversations.length) {
-    chats.selectChat(chats.conversations[0].id)
+    chats.selectChat(chats.conversations[0].id, { read: false })
   }
 }
-onMounted(ensureSelection)
+// Mark the open chat read only when the tab is actually visible/focused.
+function markActiveRead() {
+  if (chats.activeId && document.visibilityState === 'visible') chats.markRead(chats.activeId)
+}
+onMounted(() => {
+  ensureSelection()
+  document.addEventListener('visibilitychange', markActiveRead)
+  window.addEventListener('focus', markActiveRead)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', markActiveRead)
+  window.removeEventListener('focus', markActiveRead)
+})
 watch(() => ui.isDesktop, ensureSelection)
+
+// Sent / Seen status under my latest message.
+const lastStatus = computed(() => {
+  const msgs = chats.activeConversation?.messages
+  if (!msgs?.length) return ''
+  const last = msgs[msgs.length - 1]
+  if (last.sender !== 'me') return ''
+  return last.seen ? 'Seen' : 'Sent'
+})
 
 function open(conversation) {
   chats.selectChat(conversation.id)
@@ -176,6 +198,7 @@ function menuAction(kind) {
           >
             <div class="bubble" :class="m.sender === 'me' ? 'bubble--me' : 'bubble--them'">{{ m.text }}</div>
           </div>
+          <div v-if="lastStatus" class="msg-status">{{ lastStatus }}</div>
         </div>
 
         <div v-if="chats.activeConversation.blocked" class="blocked-bar">
@@ -207,7 +230,9 @@ function menuAction(kind) {
 
 <style scoped>
 .chats {
-  flex: 1;
+  /* Bound to the viewport so the message list scrolls internally, not the page. */
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
   display: flex;
   gap: 14px;
@@ -550,6 +575,14 @@ function menuAction(kind) {
   color: var(--ml-ink-1);
   border-radius: 18px 18px 18px 5px;
 }
+.msg-status {
+  align-self: flex-end;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ml-ink-3);
+  margin-top: -2px;
+  padding-right: 4px;
+}
 
 .composer {
   flex: none;
@@ -648,6 +681,7 @@ function menuAction(kind) {
 
 @media (max-width: 999px) {
   .chats {
+    height: calc(100dvh - 92px); /* room for the fixed bottom nav */
     padding: 14px;
   }
 }

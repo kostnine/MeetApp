@@ -189,6 +189,20 @@ export class MessagesService {
     return message;
   }
 
+  // Mark the conversation read for whichever side the viewer is on.
+  async markRead(conversationId: string, viewerProfileId?: string) {
+    if (viewerProfileId) {
+      await this.db.query(
+        `update conversations
+         set owner_last_read_at = case when owner_profile_id = $2 then now() else owner_last_read_at end,
+             guest_last_read_at = case when guest_profile_id = $2 then now() else guest_last_read_at end
+         where id = $1 and (owner_profile_id = $2 or guest_profile_id = $2)`,
+        [conversationId, viewerProfileId],
+      );
+    }
+    return this.getConversation(conversationId, viewerProfileId);
+  }
+
   async setBlocked(conversationId: string, blocked: boolean, ownerProfileId?: string) {
     const params: unknown[] = [conversationId, blocked];
     let viewerWhere = '';

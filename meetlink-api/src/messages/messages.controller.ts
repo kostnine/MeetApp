@@ -32,6 +32,12 @@ export class MessagesController {
     return this.messages.addMessage(id, dto, request.user?.profileId);
   }
 
+  @Patch('conversations/:id/read')
+  @UseGuards(AdminGuard)
+  markRead(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.messages.markRead(id, request.user?.profileId);
+  }
+
   @Patch('conversations/:id/block')
   @UseGuards(AdminGuard)
   blockConversation(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
