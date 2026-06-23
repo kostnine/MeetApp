@@ -16,7 +16,7 @@ let outerRing = null
 let innerRing = null
 let youMarker = null
 const storyLayer = L.layerGroup()
-const center = [MAP_CENTER.lat, MAP_CENTER.lng]
+const cc = () => [map.center.lat, map.center.lng]
 
 function youIcon(hasStory) {
   const storyClass = hasStory ? ' lf-you--story' : ''
@@ -41,9 +41,12 @@ function storyIcon(story) {
 
 function renderStories() {
   storyLayer.clearLayers()
+  // Stories are laid out around the default centre; shift them to the current centre.
+  const dLat = map.center.lat - MAP_CENTER.lat
+  const dLng = map.center.lng - MAP_CENTER.lng
   for (const story of map.visibleStories) {
     if (typeof story.lat !== 'number') continue
-    L.marker([story.lat, story.lng], { icon: storyIcon(story), keyboard: false })
+    L.marker([story.lat + dLat, story.lng + dLng], { icon: storyIcon(story), keyboard: false })
       .on('click', () => emit('open-story', story))
       .addTo(storyLayer)
   }
@@ -58,15 +61,44 @@ function applyRadius(fit = true) {
   }
 }
 
+// Move the map + YOU marker + radius rings + stories to the current centre.
+function applyCenter(fit = true) {
+  const c = cc()
+  if (outerRing) outerRing.setLatLng(c)
+  if (innerRing) innerRing.setLatLng(c)
+  if (youMarker) youMarker.setLatLng(c)
+  renderStories()
+  if (fit && leaflet && outerRing) {
+    leaflet.invalidateSize() // correct dimensions if the location resolved early
+    // Instant snap to the new centre (an animated pan can stall mid-flight).
+    leaflet.fitBounds(outerRing.getBounds(), { padding: [40, 40], animate: false })
+  }
+}
+
+// Ask the browser for the real location; falls back silently to the current centre.
+function locateUser(announce = false) {
+  if (announce) emit('locate')
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      map.setCenter(pos.coords.latitude, pos.coords.longitude)
+      applyCenter(true) // move now; don't rely solely on the reactive watch
+    },
+    () => {
+      /* permission denied or unavailable — keep the current centre */
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+  )
+}
+
 function recenter() {
-  if (leaflet) leaflet.setView(center, leaflet.getZoom(), { animate: true })
-  applyRadius(true)
-  emit('locate')
+  applyCenter(true)
+  locateUser(true)
 }
 
 onMounted(() => {
   leaflet = L.map(mapEl.value, {
-    center,
+    center: cc(),
     zoom: 15,
     zoomControl: false,
     attributionControl: true,
@@ -79,7 +111,7 @@ onMounted(() => {
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(leaflet)
 
-  outerRing = L.circle(center, {
+  outerRing = L.circle(cc(), {
     radius: map.radius,
     color: '#8b7cf6',
     weight: 1,
@@ -89,7 +121,7 @@ onMounted(() => {
     interactive: false,
   }).addTo(leaflet)
 
-  innerRing = L.circle(center, {
+  innerRing = L.circle(cc(), {
     radius: map.radius / 2,
     color: '#8b7cf6',
     weight: 1,
@@ -99,7 +131,7 @@ onMounted(() => {
     interactive: false,
   }).addTo(leaflet)
 
-  youMarker = L.marker(center, { icon: youIcon(map.hasMyStory), interactive: true, zIndexOffset: 1000 })
+  youMarker = L.marker(cc(), { icon: youIcon(map.hasMyStory), interactive: true, zIndexOffset: 1000 })
     .on('click', () => emit('open-my-story'))
     .addTo(leaflet)
   storyLayer.addTo(leaflet)
@@ -109,6 +141,9 @@ onMounted(() => {
 
   // Ensure tiles fill once the container has its final size.
   setTimeout(() => leaflet && leaflet.invalidateSize(), 200)
+
+  // Try to center on the device's real location (silent fallback to the default).
+  locateUser(false)
 })
 
 onBeforeUnmount(() => {
@@ -120,6 +155,7 @@ onBeforeUnmount(() => {
 
 watch(() => map.radius, () => applyRadius(true))
 watch(() => map.visibleStories, renderStories, { deep: true })
+watch(() => map.center, () => applyCenter(true), { deep: true })
 watch(
   () => map.hasMyStory,
   (has) => {

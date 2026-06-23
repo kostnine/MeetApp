@@ -114,6 +114,8 @@ const SEED_STORIES = [
 export const useMapStore = defineStore('map', () => {
   const radius = ref(1000) // meters
   const view = ref('map') // 'map' | 'list'
+  // Map centre — defaults to Vilnius, replaced by the device's real location when allowed.
+  const center = ref({ lat: MAP_CENTER.lat, lng: MAP_CENTER.lng })
   const hiddenIds = ref([])
   const stories = ref(SEED_STORIES.map((s, i) => decorate(s, i)))
   const myStories = ref([])
@@ -151,6 +153,12 @@ export const useMapStore = defineStore('map', () => {
 
   function setView(next) {
     view.value = next
+  }
+
+  function setCenter(lat, lng) {
+    if (typeof lat === 'number' && typeof lng === 'number' && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+      center.value = { lat, lng }
+    }
   }
 
   function hideStory(id) {
@@ -194,6 +202,7 @@ export const useMapStore = defineStore('map', () => {
   return {
     radius,
     view,
+    center,
     stories,
     myStories,
     hasMyStory,
@@ -204,6 +213,7 @@ export const useMapStore = defineStore('map', () => {
     nearbyCount,
     setRadius,
     setView,
+    setCenter,
     hideStory,
     load,
     publishStory,
