@@ -38,28 +38,55 @@ function setToken(value) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export async function apiFetch(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  })
+  const method = (options.method || 'GET').toUpperCase()
+  // Only reads are safe to auto-retry. Retries cover a server that's waking up (Render free
+  // tier cold-starts after idle return a brief 502/503/504 or a network error) so a reload
+  // reliably succeeds instead of leaving e.g. the chat list empty.
+  const retryable = method === 'GET'
+  let attempt = 0
 
-  if (!response.ok) {
-    const text = await response.text()
-    let message = text
+  while (true) {
+    let response
     try {
-      const parsed = JSON.parse(text)
-      message = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message || text
-    } catch {
-      message = text
+      response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      })
+    } catch (networkError) {
+      if (retryable && attempt < 2) {
+        attempt += 1
+        await sleep(500 * attempt)
+        continue
+      }
+      throw networkError
     }
-    const error = new Error(message || `API ${response.status}`)
-    error.status = response.status
-    throw error
-  }
 
-  if (response.status === 204) return null
-  return response.json()
+    if (retryable && [502, 503, 504].includes(response.status) && attempt < 2) {
+      attempt += 1
+      await sleep(500 * attempt)
+      continue
+    }
+
+    if (!response.ok) {
+      const text = await response.text()
+      let message = text
+      try {
+        const parsed = JSON.parse(text)
+        message = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message || text
+      } catch {
+        message = text
+      }
+      const error = new Error(message || `API ${response.status}`)
+      error.status = response.status
+      throw error
+    }
+
+    if (response.status === 204) return null
+    return response.json()
+  }
 }
 
 // ----- Auth -----

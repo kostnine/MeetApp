@@ -16,11 +16,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   let restorePromise = null
 
-  async function enter() {
-    // Drop any previous account's socket (so we don't reuse its token/rooms) and clear all
-    // in-memory data before loading THIS account's — prevents cross-account leakage.
+  async function enter({ reset = false } = {}) {
+    // Drop any previous account's socket (so we don't reuse its token/rooms).
     disconnectSocket()
-    useSessionStore().reset()
+    // Clear in-memory data ONLY when switching accounts (login/register/guest) — NOT on a
+    // page-reload restore. Resetting on restore meant a transient reload failure (e.g. a
+    // cold-started server) left the chat list emptied instead of just reloading.
+    if (reset) useSessionStore().reset()
     await useSessionStore().loadData()
     connectSocket(user.value?.nickname)
   }
@@ -32,23 +34,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
   async function doRestore() {
     user.value = await restoreSession()
-    if (user.value) await enter()
+    if (user.value) await enter({ reset: false })
     return user.value
   }
 
   async function login(identifier, password) {
     user.value = await loginRequest(identifier, password)
-    await enter()
+    await enter({ reset: true })
   }
 
   async function register(payload) {
     user.value = await registerRequest(payload)
-    await enter()
+    await enter({ reset: true })
   }
 
   async function guest() {
     user.value = await guestLogin()
-    await enter()
+    await enter({ reset: true })
   }
 
   function logout() {
