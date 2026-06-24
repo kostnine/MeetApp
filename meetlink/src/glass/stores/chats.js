@@ -216,9 +216,13 @@ export const useChatsStore = defineStore('chats', () => {
       try {
         const data = await apiFetch(`/messages/conversations/${id}`, { headers: authHeaders() })
         conversation.otherRead = readTimes(data, conversation.side).otherRead
-        conversation.messages = (data.messages || []).map((m) =>
+        const incoming = (data.messages || []).map((m) =>
           mapMessage(m, conversation.side, conversation.otherRead),
         )
+        // Keep any optimistic messages (e.g. a just-sent story reply carrying replyStory)
+        // that the server payload doesn't have yet — overwriting would orphan them.
+        const optimistic = conversation.messages.filter((m) => !incoming.some((x) => x.id === m.id))
+        conversation.messages = [...incoming, ...optimistic]
         conversation.loaded = true
       } catch {
         // leave messages empty on failure
@@ -259,6 +263,13 @@ export const useChatsStore = defineStore('chats', () => {
     if (!conversation || !text) return
 
     const local = { id: nextId(), sender: 'me', text, at: new Date().toISOString(), seen: false }
+    // The story this reply answers is stashed on the conversation (by startFromStory);
+    // consume it once so only this reply message carries the quoted-story marker, and it
+    // can never leak onto a different thread.
+    if (conversation.pendingReplyStory) {
+      local.replyStory = conversation.pendingReplyStory
+      conversation.pendingReplyStory = null
+    }
     conversation.messages.push(local)
     conversation.lastMessage = text
     draft.value = ''
@@ -288,7 +299,19 @@ export const useChatsStore = defineStore('chats', () => {
         const serverMsg = (created.messages || [])[0]
         const idx = conversation.messages.indexOf(local)
         if (serverMsg && idx !== -1) {
-          conversation.messages.splice(idx, 1, mapMessage(serverMsg, 'owner', conversation.otherRead))
+          const mapped = mapMessage(serverMsg, 'owner', conversation.otherRead)
+          if (local.replyStory) mapped.replyStory = local.replyStory // keep the quoted-story marker
+          conversation.messages.splice(idx, 1, mapped)
+        }
+        // A socket echo may have unshifted a DUPLICATE conversation for created.id while the
+        // POST was in flight (it couldn't match our temp id). Merge its messages back and drop
+        // it — otherwise activeConversation (find-first) would bind to the quote-less duplicate.
+        const dupeIdx = conversations.value.findIndex((c) => c !== conversation && c.id === created.id)
+        if (dupeIdx !== -1) {
+          for (const m of conversations.value[dupeIdx].messages || []) {
+            if (!conversation.messages.some((x) => x.id === m.id)) conversation.messages.push(m)
+          }
+          conversations.value.splice(dupeIdx, 1)
         }
         if (activeId.value !== created.id) activeId.value = created.id
       } catch {
@@ -306,8 +329,18 @@ export const useChatsStore = defineStore('chats', () => {
       const index = conversation.messages.indexOf(local)
       if (index !== -1) {
         // The socket echo may have already added the server message — avoid a duplicate.
-        if (conversation.messages.some((m) => m.id === created.id)) conversation.messages.splice(index, 1)
-        else conversation.messages.splice(index, 1, mapMessage(created, conversation.side, conversation.otherRead))
+        if (conversation.messages.some((m) => m.id === created.id)) {
+          // Carry the quoted-story marker onto the echoed message before dropping the dupe.
+          if (local.replyStory) {
+            const echoed = conversation.messages.find((m) => m.id === created.id)
+            if (echoed && !echoed.replyStory) echoed.replyStory = local.replyStory
+          }
+          conversation.messages.splice(index, 1)
+        } else {
+          const mapped = mapMessage(created, conversation.side, conversation.otherRead)
+          if (local.replyStory) mapped.replyStory = local.replyStory // keep the quoted-story marker
+          conversation.messages.splice(index, 1, mapped)
+        }
       }
     } catch {
       // keep the optimistic message if the send fails
@@ -406,11 +439,17 @@ export const useChatsStore = defineStore('chats', () => {
       story && (story.text || story.image)
         ? { name: story.name, snippet: story.text || 'Photo story', gradient: story.gradient || '', mine: true }
         : null
+    // conversation.replyStory → drives the short centered context pill (persists);
+    // conversation.pendingReplyStory → consumed by the next sendMessage to mark the reply
+    // message (one-shot, conversation-scoped so it can't leak to another thread).
     const existing = conversations.value.find(
       (c) => c.name.toLowerCase() === String(story.name).toLowerCase(),
     )
     if (existing) {
-      if (replyStory) existing.replyStory = replyStory
+      if (replyStory) {
+        existing.replyStory = replyStory
+        existing.pendingReplyStory = replyStory
+      }
       selectChat(existing.id)
       return existing.id
     }
@@ -424,6 +463,7 @@ export const useChatsStore = defineStore('chats', () => {
       online: !!story.online,
       source: 'story',
       replyStory,
+      pendingReplyStory: replyStory,
       unread: 0,
       messages: [],
     }

@@ -28,12 +28,6 @@ const sourceText = computed(() => {
   if (c.replyStory) return c.replyStory.mine ? 'You replied to a story' : 'Replied to your story'
   return c.source === 'story' ? 'Started from a map story' : 'Started from a request note'
 })
-// Full directional label shown above the quoted story.
-const replyStoryLabel = computed(() => {
-  const r = chats.activeConversation?.replyStory
-  if (!r) return ''
-  return r.mine ? `You replied to ${r.name}’s story` : `${r.name} replied to your story`
-})
 
 // On desktop keep a conversation open in the right pane — but DON'T mark it read
 // (otherwise a backgrounded/auto-selected chat would swallow the unread indicator).
@@ -214,37 +208,26 @@ function menuAction(kind) {
             <Mail :size="13" /> {{ chats.activeConversation.contact }}
           </button>
 
-          <!-- the story this chat answers — anchored to the reply's side -->
-          <div
-            v-if="chats.activeConversation.replyStory"
-            class="story-reply"
-            :class="chats.activeConversation.replyStory.mine ? 'story-reply--me' : 'story-reply--them'"
-          >
-            <div class="story-reply-label">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9l5-5M4 9h9a7 7 0 0 1 7 7v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              {{ replyStoryLabel }}
-            </div>
-            <div class="story-reply-quote">
-              <span
-                class="story-reply-bar"
-                :style="{ background: chats.activeConversation.replyStory.mine ? '#8b7cf6' : '#ec7fb6' }"
-              />
-              <div
-                class="story-reply-thumb"
-                :style="{ background: chats.activeConversation.replyStory.gradient || 'rgba(139,124,246,.2)' }"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
-              </div>
-              <div class="story-reply-text">{{ chats.activeConversation.replyStory.snippet }}</div>
-            </div>
-          </div>
-
           <div
             v-for="m in chats.activeConversation.messages"
             :key="m.id"
             class="msg-row"
             :class="m.sender === 'me' ? 'msg-row--me' : 'msg-row--them'"
           >
+            <!-- the story this message replied to, sitting right above the reply -->
+            <template v-if="m.replyStory">
+              <div class="reply-q-label">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9l5-5M4 9h9a7 7 0 0 1 7 7v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {{ m.replyStory.mine ? `You replied to ${m.replyStory.name}’s story` : `${m.replyStory.name} replied to your story` }}
+              </div>
+              <div class="reply-q">
+                <span class="reply-q-bar" :style="{ background: m.replyStory.mine ? '#8b7cf6' : '#ec7fb6' }" />
+                <div class="reply-q-thumb" :style="{ background: m.replyStory.gradient || 'rgba(139,124,246,.2)' }">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="reply-q-text">{{ m.replyStory.snippet }}</div>
+              </div>
+            </template>
             <div class="bubble" :class="m.sender === 'me' ? 'bubble--me' : 'bubble--them'">{{ m.text }}</div>
           </div>
           <div v-if="lastStatus" class="msg-status">{{ lastStatus }}</div>
@@ -617,52 +600,41 @@ function menuAction(kind) {
 }
 .msg-row {
   display: flex;
-}
-.msg-row--me {
-  justify-content: flex-end;
-}
-.msg-row--them {
-  justify-content: flex-start;
-}
-.story-reply {
-  display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 74%;
-  margin-bottom: 4px;
 }
-.story-reply--them {
-  align-self: flex-start;
-  align-items: flex-start;
-}
-.story-reply--me {
-  align-self: flex-end;
+.msg-row--me {
   align-items: flex-end;
 }
-.story-reply-label {
+.msg-row--them {
+  align-items: flex-start;
+}
+.reply-q-label {
   display: flex;
   align-items: center;
   gap: 5px;
+  max-width: 74%;
   font-size: 11px;
   font-weight: 700;
   color: var(--ml-ink-3);
   padding: 0 4px;
 }
-.story-reply-quote {
+.reply-q {
   display: flex;
   align-items: stretch;
   gap: 9px;
+  max-width: 74%;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.75);
   padding: 8px 11px 8px 9px;
 }
-.story-reply-bar {
+.reply-q-bar {
   flex: none;
   width: 4px;
   border-radius: 999px;
 }
-.story-reply-thumb {
+.reply-q-thumb {
   flex: none;
   width: 36px;
   height: 36px;
@@ -671,7 +643,7 @@ function menuAction(kind) {
   align-items: center;
   justify-content: center;
 }
-.story-reply-text {
+.reply-q-text {
   align-self: center;
   font-size: 12.5px;
   color: #7c7493;
