@@ -30,7 +30,13 @@ export class MessagesService {
       ? await this.profiles.findByNickname(dto.ownerNickname)
       : await this.profiles.findAdminProfile();
     const guestNickname = dto.guestNickname?.trim() || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
-    const guestProfile = await this.resolveGuestProfile(guestNickname, owner.id);
+    // Prefer an explicit linked profile (a signed-in actor); never link the chat to
+    // the owner themselves. Fall back to matching the guest by nickname.
+    const explicitGuestId =
+      dto.guestProfileId && dto.guestProfileId !== owner.id ? dto.guestProfileId : null;
+    const guestProfile = explicitGuestId
+      ? { id: explicitGuestId }
+      : await this.resolveGuestProfile(guestNickname, owner.id);
 
     const conversationResult = await this.db.query(
       `insert into conversations (owner_profile_id, guest_nickname, guest_profile_id, contact, source, updated_at)

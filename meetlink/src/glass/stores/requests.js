@@ -267,31 +267,37 @@ export const useRequestsStore = defineStore('requests', () => {
   }
 
   // A reply submitted from the public request page → persists + lands in Incoming.
+  // When the replier is signed in, authHeaders() links the reply to their account
+  // (so the backend opens a real two-way chat and resolves their real name).
   async function addPublicReply(code, { contact, alias, note }) {
     const request = findByCode(code)
     const payload = {
       status: 'new',
-      alias: String(alias || '').trim() || 'Someone',
+      // Leave blank when not provided — the backend fills it from the signed-in profile.
+      alias: String(alias || '').trim(),
       contact: String(contact || '').trim(),
       message: String(note || '').trim(),
     }
     try {
       const created = await apiFetch(`/requests/${code}/responses`, {
         method: 'POST',
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       })
       responses.value.unshift(mapResponse(created, request?.id || code, responses.value.length))
+      return created
     } catch {
       responses.value.unshift({
         id: `in-${Date.now()}`,
         requestId: request ? request.id : code,
-        name: payload.alias,
+        name: payload.alias || 'Someone',
         contact: payload.contact,
         time: 'just now',
         message: payload.message || 'Opened your link.',
         status: 'new',
         gradient: REPLY_SKINS[responses.value.length % REPLY_SKINS.length],
       })
+      return null
     }
   }
 

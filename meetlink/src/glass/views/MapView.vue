@@ -11,10 +11,8 @@ const ui = useUiStore()
 const radiusOptions = RADIUS_OPTIONS
 
 function openStory(story) {
-  // Open the full-screen viewer and let the user tap through every nearby story.
-  const list = map.visibleStories
-  const index = Math.max(0, list.findIndex((s) => s.id === story.id))
-  ui.openStoryViewer(list, index)
+  // Tap a nearby person → open their card (avatar, distance, their line, Message / Send request).
+  ui.openPerson(story)
 }
 function postStory() {
   ui.openPostStory()

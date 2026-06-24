@@ -13,6 +13,8 @@ export const useUiStore = defineStore('ui', () => {
   const qrRequest = ref(null)
   const selectedStory = ref(null)
   const showPostStory = ref(false)
+  // Tap-a-person card on the map (avatar, distance, their line, Message / Send request).
+  const selectedPerson = ref(null)
   // Full-screen story viewer (Instagram-style tap-through).
   const storyList = ref([])
   const storyIndex = ref(0)
@@ -63,6 +65,13 @@ export const useUiStore = defineStore('ui', () => {
     showPostStory.value = false
   }
 
+  function openPerson(person) {
+    selectedPerson.value = person
+  }
+  function closePerson() {
+    selectedPerson.value = null
+  }
+
   function openStoryViewer(list, index = 0, mine = false) {
     storyList.value = Array.isArray(list) ? list : []
     storyIndex.value = index
@@ -94,6 +103,7 @@ export const useUiStore = defineStore('ui', () => {
     qrRequest,
     selectedStory,
     showPostStory,
+    selectedPerson,
     init,
     showToast,
     openQr,
@@ -102,6 +112,8 @@ export const useUiStore = defineStore('ui', () => {
     closeStory,
     openPostStory,
     closePostStory,
+    openPerson,
+    closePerson,
     storyList,
     storyIndex,
     storyMine,

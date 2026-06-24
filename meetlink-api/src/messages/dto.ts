@@ -9,6 +9,12 @@ export class StartConversationDto {
   @IsString()
   guestNickname?: string;
 
+  // When a signed-in person starts/continues the chat, link it to their profile
+  // directly (more reliable than matching by nickname).
+  @IsOptional()
+  @IsString()
+  guestProfileId?: string;
+
   @IsOptional()
   @IsString()
   contact?: string;

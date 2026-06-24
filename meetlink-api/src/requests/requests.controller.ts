@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AdminGuard } from '../auth/admin.guard';
+import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { CreateMeetRequestDto, RespondToMeetRequestDto } from './dto';
 import { RequestsService } from './requests.service';
@@ -26,7 +27,12 @@ export class RequestsController {
   }
 
   @Post(':code/responses')
-  respond(@Param('code') code: string, @Body() dto: RespondToMeetRequestDto) {
-    return this.requests.respond(code, dto);
+  @UseGuards(OptionalAuthGuard)
+  respond(
+    @Req() request: AuthenticatedRequest,
+    @Param('code') code: string,
+    @Body() dto: RespondToMeetRequestDto,
+  ) {
+    return this.requests.respond(code, dto, request.user?.profileId);
   }
 }

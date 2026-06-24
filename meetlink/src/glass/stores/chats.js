@@ -175,13 +175,36 @@ export const useChatsStore = defineStore('chats', () => {
 
   const unreadTotal = computed(() => conversations.value.reduce((sum, c) => sum + (c.unread || 0), 0))
 
-  // Load the owner's conversations from the backend.
+  // Load the owner's conversations from the backend. Merge over the current list so a
+  // background refresh never wipes the messages of a thread that's already open/loaded.
   async function load() {
     try {
       const rows = await apiFetch('/messages/conversations', { headers: authHeaders() })
-      conversations.value = rows.map((row, i) => mapConversation(row, i))
+      const prev = new Map(conversations.value.map((c) => [c.id, c]))
+      conversations.value = rows.map((row, i) => {
+        const mapped = mapConversation(row, i)
+        const existing = prev.get(row.id)
+        if (existing?.loaded) {
+          mapped.messages = existing.messages
+          mapped.loaded = true
+          mapped.otherRead = existing.otherRead ?? mapped.otherRead
+        }
+        return mapped
+      })
     } catch {
       // keep seeded conversations if the backend is unreachable
+    }
+  }
+
+  // Pull in a single conversation we don't have yet (e.g. a brand-new request chat),
+  // WITHOUT rebuilding the whole list — rebuilding would clear the open thread.
+  async function addRemoteConversation(id) {
+    if (!id || conversations.value.some((c) => c.id === id)) return
+    try {
+      const row = await apiFetch(`/messages/conversations/${id}`, { headers: authHeaders() })
+      receiveConversation(row)
+    } catch {
+      // ignore — it'll show up on the next manual load
     }
   }
 
@@ -298,7 +321,9 @@ export const useChatsStore = defineStore('chats', () => {
     if (!convId || !raw) return
     const conversation = conversations.value.find((c) => c.id === convId)
     if (!conversation) {
-      load() // unknown conversation — refresh the list
+      // Unknown conversation — fetch just that one; do NOT reload the whole list
+      // (a full reload would blank out whichever chat is currently open).
+      addRemoteConversation(convId)
       return
     }
     const msg = mapMessage(raw, conversation.side, conversation.otherRead)

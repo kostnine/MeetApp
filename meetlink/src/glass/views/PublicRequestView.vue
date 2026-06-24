@@ -39,7 +39,13 @@ async function submit() {
     ui.showToast('Add a contact so they can reach you')
     return
   }
-  await requests.addPublicReply(code, pForm)
+  const created = await requests.addPublicReply(code, pForm)
+  // Signed-in reply → the backend opened a real chat; drop them straight into it.
+  if (created?.conversation?.id) {
+    ui.showToast('Reply sent — chat opened')
+    router.push('/chats')
+    return
+  }
   mode.value = 'done'
 }
 async function copyContact() {

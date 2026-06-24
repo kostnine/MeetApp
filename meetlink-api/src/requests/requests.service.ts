@@ -113,10 +113,21 @@ export class RequestsService {
     return this.withResponses(request);
   }
 
-  async respond(code: string, dto: RespondToMeetRequestDto) {
+  async respond(code: string, dto: RespondToMeetRequestDto, responderProfileId?: string) {
     const request = await this.findByCode(code);
     const accepted = dto.status === 'accepted';
-    const alias = dto.alias?.trim() || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // A signed-in responder (other than the owner) links the chat to their real
+    // profile, so both sides see it and names resolve. Replying to your own request
+    // stays anonymous.
+    const ownerProfileId = (request as Record<string, any>).owner_profile_id;
+    const responder =
+      responderProfileId && responderProfileId !== ownerProfileId
+        ? await this.profiles.findById(responderProfileId).catch(() => null)
+        : null;
+
+    const alias =
+      dto.alias?.trim() || responder?.nickname || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
     const contact = dto.status === 'declined' ? '' : dto.contact?.trim();
 
     if (accepted && !contact) {
@@ -138,12 +149,16 @@ export class RequestsService {
     let response = result.rows[0];
     let conversation: Record<string, any> | null = null;
 
-    if (accepted) {
+    // Open a real conversation when the request is accepted OR a signed-in person
+    // replies — so a logged-in reply is instantly a linked, two-way chat.
+    if (accepted || responder) {
       conversation = await this.messages.startConversation({
         ownerNickname: request.owner_nickname,
-        guestNickname: alias,
-        contact,
+        guestNickname: responder?.nickname || alias,
+        guestProfileId: responder?.id,
+        contact: contact || undefined,
         body: message,
+        sender: 'guest',
         source: 'request',
       });
 

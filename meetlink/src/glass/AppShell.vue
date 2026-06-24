@@ -12,6 +12,7 @@ import BrandLogo from './components/BrandLogo.vue'
 import QrModal from './components/QrModal.vue'
 import StoryViewer from './components/StoryViewer.vue'
 import PostStorySheet from './components/PostStorySheet.vue'
+import PersonSheet from './components/PersonSheet.vue'
 import MeAvatar from './components/MeAvatar.vue'
 
 const ui = useUiStore()
@@ -118,6 +119,7 @@ onMounted(() => {
     <QrModal />
     <StoryViewer v-if="ui.storyList.length" />
     <PostStorySheet />
+    <PersonSheet />
   </div>
 </template>
 

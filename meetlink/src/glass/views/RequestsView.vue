@@ -85,10 +85,14 @@ async function share(code) {
   ui.showToast('Link copied')
 }
 
-function startChat(response) {
+// Accept a reply → it moves to the accepted state (an "Open chat" button then appears).
+function accept(response) {
   requests.acceptResponse(response)
-  chats.startFromRequest(response)
-  router.push('/chats')
+  ui.showToast('Accepted — open the chat to say hi')
+}
+function decline(response) {
+  requests.archiveResponse(response)
+  ui.showToast('Declined')
 }
 async function copyContact(response) {
   if (!response?.contact) {
@@ -97,10 +101,6 @@ async function copyContact(response) {
   }
   const ok = await ui.copyText(response.contact)
   ui.showToast(ok ? 'Contact copied' : response.contact)
-}
-function archive(response) {
-  requests.archiveResponse(response)
-  ui.showToast('Archived')
 }
 function openChat(response) {
   chats.startFromRequest(response)
@@ -219,9 +219,8 @@ async function copyGenerated() {
             <p class="reply-message">{{ r.message }}</p>
             <div class="reply-actions">
               <template v-if="r.status === 'new'">
-                <button type="button" class="btn btn--primary" @click="startChat(r)">Start chat</button>
-                <button type="button" class="btn btn--glass" @click="copyContact(r)">Copy contact</button>
-                <button type="button" class="btn btn--ghost" @click="archive(r)">Archive</button>
+                <button type="button" class="btn btn--primary" @click="accept(r)">Accept</button>
+                <button type="button" class="btn btn--ghost" @click="decline(r)">Decline</button>
               </template>
               <button v-else type="button" class="btn btn--outline" @click="openChat(r)">Open chat</button>
             </div>
