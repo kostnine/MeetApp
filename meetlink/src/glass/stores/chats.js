@@ -22,6 +22,10 @@ function nextId() {
   return ++msgSeq
 }
 
+// The story being replied to, stashed by startFromStory so the next sent message
+// can render the quoted-story block ("You replied to X's story").
+let pendingReplyStory = null
+
 // Backend source → Glass source badge (Story / Request).
 function mapSource(source) {
   return source === 'request' ? 'request' : 'story'
@@ -259,6 +263,11 @@ export const useChatsStore = defineStore('chats', () => {
     if (!conversation || !text) return
 
     const local = { id: nextId(), sender: 'me', text, at: new Date().toISOString(), seen: false }
+    // First reply after opening a story → show the quoted story above this message.
+    if (pendingReplyStory) {
+      local.replyStory = { ...pendingReplyStory, mine: true }
+      pendingReplyStory = null
+    }
     conversation.messages.push(local)
     conversation.lastMessage = text
     draft.value = ''
@@ -288,7 +297,9 @@ export const useChatsStore = defineStore('chats', () => {
         const serverMsg = (created.messages || [])[0]
         const idx = conversation.messages.indexOf(local)
         if (serverMsg && idx !== -1) {
-          conversation.messages.splice(idx, 1, mapMessage(serverMsg, 'owner', conversation.otherRead))
+          const mapped = mapMessage(serverMsg, 'owner', conversation.otherRead)
+          if (local.replyStory) mapped.replyStory = local.replyStory // keep the quoted story
+          conversation.messages.splice(idx, 1, mapped)
         }
         if (activeId.value !== created.id) activeId.value = created.id
       } catch {
@@ -307,7 +318,11 @@ export const useChatsStore = defineStore('chats', () => {
       if (index !== -1) {
         // The socket echo may have already added the server message — avoid a duplicate.
         if (conversation.messages.some((m) => m.id === created.id)) conversation.messages.splice(index, 1)
-        else conversation.messages.splice(index, 1, mapMessage(created, conversation.side, conversation.otherRead))
+        else {
+          const mapped = mapMessage(created, conversation.side, conversation.otherRead)
+          if (local.replyStory) mapped.replyStory = local.replyStory // keep the quoted story
+          conversation.messages.splice(index, 1, mapped)
+        }
       }
     } catch {
       // keep the optimistic message if the send fails
@@ -401,6 +416,11 @@ export const useChatsStore = defineStore('chats', () => {
 
   // Open an existing conversation with this person, or start a fresh one from a map story.
   function startFromStory(story) {
+    // Remember which story this is, so the reply shows the quoted-story block.
+    pendingReplyStory =
+      story && (story.text || story.image)
+        ? { name: story.name, snippet: story.text || 'Photo story', gradient: story.gradient || '' }
+        : null
     const existing = conversations.value.find(
       (c) => c.name.toLowerCase() === String(story.name).toLowerCase(),
     )
