@@ -42,6 +42,10 @@ async function submit() {
   await requests.addPublicReply(code, pForm)
   mode.value = 'done'
 }
+async function copyContact() {
+  const ok = await ui.copyText(request.value?.contact)
+  ui.showToast(ok ? 'Contact copied' : request.value?.contact || '')
+}
 function toIncoming() {
   requests.viewIncoming()
   router.push('/requests')
@@ -79,10 +83,20 @@ function close() {
           <div class="pub-name">{{ name }}</div>
           <div class="pub-place">{{ request.place }}</div>
           <div class="pub-note">{{ request.message }}</div>
+
+          <div v-if="request.contact" class="pub-contact">
+            <div class="pub-contact-label">Reach {{ name }} directly</div>
+            <button type="button" class="pub-contact-value" @click="copyContact">
+              {{ request.contact }}
+            </button>
+            <div class="pub-contact-hint">Tap to copy</div>
+          </div>
         </div>
         <div class="pub-actions">
           <button type="button" class="btn-glass" @click="decline">Not interested</button>
-          <button type="button" class="btn-primary pub-reply" @click="mode = 'form'">Reply</button>
+          <button type="button" class="btn-primary pub-reply" @click="mode = 'form'">
+            {{ request.contact ? 'Reply in app' : 'Reply' }}
+          </button>
         </div>
         <div class="pub-noacct">No account needed to reply.</div>
       </template>
@@ -221,6 +235,40 @@ function close() {
   color: #3e3656;
   line-height: 1.55;
   text-wrap: pretty;
+}
+.pub-contact {
+  width: 100%;
+  margin-top: 16px;
+  text-align: center;
+}
+.pub-contact-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ml-eyebrow);
+  margin-bottom: 8px;
+}
+.pub-contact-value {
+  width: 100%;
+  border: 1px solid rgba(139, 124, 246, 0.4);
+  background: rgba(139, 124, 246, 0.08);
+  color: var(--ml-accent-ink);
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  font-family: var(--ml-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  word-break: break-word;
+}
+.pub-contact-value:hover {
+  background: rgba(139, 124, 246, 0.14);
+}
+.pub-contact-hint {
+  font-size: 11px;
+  color: var(--ml-ink-3);
+  margin-top: 6px;
 }
 .pub-actions {
   display: flex;

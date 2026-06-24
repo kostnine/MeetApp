@@ -39,8 +39,8 @@ export class RequestsService {
         const result = await this.db.query(
           `insert into meet_requests
              (owner_profile_id, code, type, message, looking_for, radius, age_min, age_max, visible_on_map,
-              place, display_as, custom_name, expires)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+              place, display_as, custom_name, expires, contact)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
            returning *`,
           [
             owner.id,
@@ -56,6 +56,7 @@ export class RequestsService {
             dto.displayAs ?? 'profile',
             dto.customName?.trim() || null,
             dto.expires ?? '24h',
+            dto.contact?.trim() || null,
           ],
         );
 

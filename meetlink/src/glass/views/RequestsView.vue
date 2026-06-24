@@ -320,7 +320,7 @@ async function copyGenerated() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M12 22s7-4.5 7-11V5l-7-3-7 3v6c0 6.5 7 11 7 11z" stroke="#8b83a0" stroke-width="2" stroke-linejoin="round" />
               </svg>
-              Your contact is revealed only when you accept a reply.
+              Shown on your request page so people can reach you directly — leave it blank to only chat in-app.
             </div>
           </aside>
         </div>

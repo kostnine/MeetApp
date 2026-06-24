@@ -29,6 +29,7 @@ function mapRequest(row) {
     displayName,
     anonymous: row.display_as === 'anonymous',
     place: row.place || '',
+    contact: row.contact || '',
     status: row.status === 'active' ? 'active' : 'expired',
     created: shortDate(row.created_at),
   }
@@ -222,6 +223,7 @@ export const useRequestsStore = defineStore('requests', () => {
           place: draft.place,
           displayAs: draft.display,
           customName: draft.customName,
+          contact: draft.contact?.trim() || undefined,
           expires: draft.expiry,
         }),
       })
@@ -239,6 +241,7 @@ export const useRequestsStore = defineStore('requests', () => {
         displayName: resolveDisplayName(),
         anonymous: draft.display === 'anonymous',
         place: draft.place,
+        contact: draft.contact?.trim() || '',
         status: 'active',
         created: 'just now',
       }

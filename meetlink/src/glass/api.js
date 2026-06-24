@@ -92,12 +92,51 @@ export async function registerRequest(payload) {
   return data.user
 }
 
-/** Demo "guest" path → log in as the owner (admin) with the dev password. */
+const GUEST_KEY = 'meetlink_guest'
+function readGuest() {
+  try {
+    return JSON.parse(window.localStorage.getItem(GUEST_KEY) || 'null')
+  } catch {
+    return null
+  }
+}
+function writeGuest(creds) {
+  try {
+    window.localStorage.setItem(GUEST_KEY, JSON.stringify(creds))
+  } catch {
+    // storage unavailable — guest still works this session
+  }
+}
+
+/**
+ * "Continue as guest" → a real, NON-admin user account (not the owner/admin).
+ * Reuses the same guest identity on this device; creates one on first use.
+ */
 export async function guestLogin() {
-  const data = await apiFetch('/auth/login', {
+  const saved = readGuest()
+  if (saved?.email && saved?.password) {
+    try {
+      const data = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: saved.email, password: saved.password }),
+      })
+      setToken(data.token)
+      return data.user
+    } catch {
+      // saved guest is gone — fall through and make a fresh one
+    }
+  }
+  const rand = Math.random().toString(36).slice(2, 10)
+  const creds = {
+    email: `guest_${rand}@guest.meetlink`,
+    nickname: `guest_${rand}`,
+    password: `g${rand}${rand}`,
+  }
+  const data = await apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ password: ADMIN_PASSWORD }),
+    body: JSON.stringify({ ...creds, name: 'Guest' }),
   })
+  writeGuest(creds)
   setToken(data.token)
   return data.user
 }

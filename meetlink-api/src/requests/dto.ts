@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateMeetRequestDto {
   @IsOptional()
@@ -49,6 +49,12 @@ export class CreateMeetRequestDto {
   @IsOptional()
   @IsString()
   customName?: string;
+
+  // The owner's contact to display on the public page (so people can reach them directly).
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  contact?: string;
 
   @IsOptional()
   @IsString()
