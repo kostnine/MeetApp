@@ -41,6 +41,7 @@ function mapResponse(row, requestId, index) {
     id: row.id,
     requestId,
     name: row.alias || 'Someone',
+    age: row.age || null,
     contact: row.contact || '',
     time: shortDate(row.created_at) || 'just now',
     message: row.message || '',

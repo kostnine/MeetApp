@@ -45,7 +45,26 @@ function statusBadge(request) {
 }
 function replyBadge(response) {
   if (response.status === 'accepted') return { text: 'Accepted', color: '#1fb98c', bg: 'rgba(52,217,168,.14)' }
-  return { text: 'New', color: '#5a4ff6', bg: 'rgba(139,124,246,.14)' }
+  return { text: 'New reply', color: '#5a4ff6', bg: 'rgba(139,124,246,.14)' }
+}
+
+// The original request this reply answered (shown as a quoted snippet on the card).
+function reqSnippet(response) {
+  const req = requests.requests.find((q) => q.id === response.requestId)
+  return req?.message || ''
+}
+
+// Turn the single stored contact string into a labelled, copyable chip.
+function contactChips(response) {
+  const raw = String(response.contact || '').trim()
+  if (!raw) return []
+  const low = raw.toLowerCase()
+  let label = 'Contact'
+  if (low.includes('t.me') || low.includes('telegram')) label = 'Telegram'
+  else if (/^[+0-9][0-9\s()\-]{4,}$/.test(raw)) label = 'Phone'
+  else if (raw.startsWith('@') || low.includes('instagram')) label = 'Instagram'
+  else if (raw.includes('@') && raw.includes('.')) label = 'Email'
+  return [{ label, value: raw }]
 }
 function replyBorder(response) {
   if (response.status === 'accepted') return 'rgba(52,217,168,.3)'
@@ -85,22 +104,28 @@ async function share(code) {
   ui.showToast('Link copied')
 }
 
-// Accept a reply → it moves to the accepted state (an "Open chat" button then appears).
-function accept(response) {
+// Start chat = accept the reply and open the conversation.
+function startChat(response) {
   requests.acceptResponse(response)
-  ui.showToast('Accepted — open the chat to say hi')
+  chats.startFromRequest(response)
+  router.push('/chats')
 }
-function decline(response) {
+function archive(response) {
   requests.archiveResponse(response)
-  ui.showToast('Declined')
+  ui.showToast('Archived')
 }
-async function copyContact(response) {
-  if (!response?.contact) {
+async function copyValue(text) {
+  const ok = await ui.copyText(text)
+  ui.showToast(ok ? 'Copied' : text || '')
+}
+function saveContact(response) {
+  const all = contactChips(response).map((c) => c.value).join('\n')
+  if (!all) {
     ui.showToast('No contact was left')
     return
   }
-  const ok = await ui.copyText(response.contact)
-  ui.showToast(ok ? 'Contact copied' : response.contact)
+  ui.copyText(all)
+  ui.showToast('Contact copied')
 }
 function openChat(response) {
   chats.startFromRequest(response)
@@ -198,29 +223,50 @@ async function copyGenerated() {
               <div class="reply-id">
                 <div class="reply-name-row">
                   <span class="reply-name">{{ r.name }}</span>
+                  <span v-if="r.age" class="reply-age">{{ r.age }}</span>
                   <span
                     class="badge"
                     :style="{ color: replyBadge(r).color, background: replyBadge(r).bg }"
                     >{{ replyBadge(r).text }}</span
                   >
                 </div>
-                <button
-                  v-if="r.contact"
-                  type="button"
-                  class="reply-contact reply-contact--btn"
-                  title="Copy contact"
-                  @click="copyContact(r)"
-                >
-                  <Mail :size="12" /> {{ r.contact }} · {{ r.time }}
-                </button>
-                <div v-else class="reply-contact">No contact left · {{ r.time }}</div>
+                <div class="reply-when">Replied {{ r.time }}</div>
               </div>
             </div>
+
+            <!-- which request they replied to -->
+            <div v-if="reqSnippet(r)" class="reply-quote">
+              <span class="reply-quote-bar" />
+              <div class="reply-quote-body">
+                <div class="reply-quote-label">In reply to your request</div>
+                <div class="reply-quote-text">{{ reqSnippet(r) }}</div>
+              </div>
+            </div>
+
+            <!-- their message -->
+            <div class="reply-section-label">THEIR MESSAGE</div>
             <p class="reply-message">{{ r.message }}</p>
+
+            <!-- contacts they left -->
+            <template v-if="contactChips(r).length">
+              <div class="reply-section-label">CONTACTS THEY LEFT</div>
+              <div class="contact-chips">
+                <div v-for="(c, i) in contactChips(r)" :key="i" class="contact-chip">
+                  <div class="contact-chip-icon"><Mail :size="16" /></div>
+                  <div class="contact-chip-body">
+                    <div class="contact-chip-label">{{ c.label }}</div>
+                    <div class="contact-chip-value">{{ c.value }}</div>
+                  </div>
+                  <button type="button" class="contact-chip-copy" @click="copyValue(c.value)">Copy</button>
+                </div>
+              </div>
+            </template>
+
             <div class="reply-actions">
               <template v-if="r.status === 'new'">
-                <button type="button" class="btn btn--primary" @click="accept(r)">Accept</button>
-                <button type="button" class="btn btn--ghost" @click="decline(r)">Decline</button>
+                <button type="button" class="btn btn--primary" @click="startChat(r)">Start chat</button>
+                <button type="button" class="btn btn--glass" @click="saveContact(r)">Save contact</button>
+                <button type="button" class="btn btn--ghost" @click="archive(r)">Archive</button>
               </template>
               <button v-else type="button" class="btn btn--outline" @click="openChat(r)">Open chat</button>
             </div>
@@ -630,12 +676,124 @@ async function copyGenerated() {
 .reply-contact--btn:hover {
   background: rgba(139, 124, 246, 0.18);
 }
-.reply-message {
-  margin: 11px 0 0;
+.reply-age {
   font-size: 14px;
-  color: var(--ml-ink-2);
-  line-height: 1.5;
+  color: var(--ml-ink-3);
+}
+.reply-when {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ml-ink-3);
+  margin-top: 3px;
+}
+.reply-quote {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  margin-top: 13px;
+  border-radius: 13px;
+  background: rgba(139, 124, 246, 0.07);
+  border: 1px solid rgba(139, 124, 246, 0.16);
+  padding: 9px 12px 9px 10px;
+}
+.reply-quote-bar {
+  flex: none;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--ml-violet);
+}
+.reply-quote-body {
+  min-width: 0;
+}
+.reply-quote-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ml-eyebrow);
+}
+.reply-quote-text {
+  font-size: 12.5px;
+  color: #7c7493;
+  line-height: 1.4;
+  margin-top: 2px;
   text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.reply-section-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ml-eyebrow);
+  margin: 15px 0 7px;
+}
+.reply-message {
+  margin: 0;
+  font-size: 14.5px;
+  color: #3e3656;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.contact-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.contact-chip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.62);
+  border-radius: 13px;
+  padding: 10px 11px;
+}
+.contact-chip-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(139, 124, 246, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ml-accent-ink);
+}
+.contact-chip-body {
+  flex: 1;
+  min-width: 0;
+}
+.contact-chip-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ml-eyebrow);
+}
+.contact-chip-value {
+  font-family: var(--ml-font-display);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ml-ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contact-chip-copy {
+  flex: none;
+  border: none;
+  cursor: pointer;
+  background: rgba(139, 124, 246, 0.14);
+  color: var(--ml-accent-ink);
+  border-radius: 10px;
+  padding: 8px 13px;
+  font-family: var(--ml-font-body);
+  font-weight: 700;
+  font-size: 12.5px;
 }
 .reply-actions {
   display: flex;
