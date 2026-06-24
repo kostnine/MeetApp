@@ -100,8 +100,10 @@ function menuAction(kind) {
   } else if (kind === 'report') {
     ui.showToast('Reported')
   } else {
-    // View profile → open the counterpart's PUBLIC profile (seeded from the chat).
+    // View profile → as a chat participant you can see the counterpart's contacts
+    // (fetched via the participant-gated endpoint using the conversation id).
     ui.openViewProfile({
+      conversationId: conversation?.id,
       nickname: conversation?.nickname || '',
       name: conversation?.name,
       avatar: conversation?.avatar,

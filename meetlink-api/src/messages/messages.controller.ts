@@ -45,6 +45,13 @@ export class MessagesController {
     return this.messages.getConversation(id, this.requireProfileId(request));
   }
 
+  // The counterpart's profile incl. contacts — only for a participant of this conversation.
+  @Get('conversations/:id/counterpart')
+  @UseGuards(AdminGuard)
+  getCounterpart(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.messages.getCounterpartProfile(id, this.requireProfileId(request));
+  }
+
   @Post('conversations/:id/messages')
   @UseGuards(AdminGuard)
   sendMessage(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() dto: SendMessageDto) {

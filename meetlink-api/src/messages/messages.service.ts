@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { OnlineGateway } from '../online/online.gateway';
 import { ProfilesService } from '../profiles/profiles.service';
@@ -166,6 +166,37 @@ export class MessagesService {
     return {
       ...conversationResult.rows[0],
       messages: messagesResult.rows,
+    };
+  }
+
+  // The counterpart's full profile INCLUDING contacts — only for a verified participant of
+  // the conversation (being in a chat = you've connected, so contacts are shared). Strangers
+  // hitting the public /profiles/:nickname still get the contacts-free projection.
+  async getCounterpartProfile(conversationId: string, viewerProfileId?: string) {
+    if (!viewerProfileId) throw new UnauthorizedException('A user profile is required');
+    // getConversation with a viewer enforces that the caller is owner OR guest.
+    const conversation = (await this.getConversation(conversationId, viewerProfileId)) as Record<string, any>;
+    const counterpartId =
+      conversation.owner_profile_id === viewerProfileId
+        ? conversation.guest_profile_id
+        : conversation.owner_profile_id;
+    if (!counterpartId) {
+      throw new NotFoundException('This person has no profile');
+    }
+    const p = await this.profiles.findById(counterpartId);
+    return {
+      nickname: p.nickname,
+      name: p.name,
+      age: p.age,
+      city: p.city,
+      area: p.area,
+      bio: p.bio,
+      interests: p.interests,
+      avatar_url: p.avatar_url,
+      status: p.status,
+      instagram: p.instagram,
+      telegram: p.telegram,
+      phone: p.phone,
     };
   }
 

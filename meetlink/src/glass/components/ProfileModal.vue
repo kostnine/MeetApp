@@ -1,6 +1,6 @@
 <script setup>
-import { ref, watch } from 'vue'
-import { X, MapPin, ShieldCheck } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
+import { X, MapPin, ShieldCheck, Copy } from '@lucide/vue'
 import { apiFetch, authHeaders } from '../api'
 import { useUiStore } from '../stores/ui'
 
@@ -10,23 +10,26 @@ const loading = ref(false)
 const error = ref('') // '' | 'no-profile' | <message>
 const profile = ref(null)
 
-// Fetch the counterpart's PUBLIC profile whenever the overlay opens. The public endpoint
-// returns no contacts (instagram/telegram/phone) — those stay private.
+// When opened from a chat we use the PARTICIPANT-GATED endpoint (you've connected, so you may
+// see their contacts). Otherwise the public endpoint, which never returns contacts.
 watch(
   () => ui.viewProfile,
   async (seed) => {
     profile.value = null
     error.value = ''
     if (!seed) return
-    if (!seed.nickname) {
+    const url = seed.conversationId
+      ? `/messages/conversations/${seed.conversationId}/counterpart`
+      : seed.nickname
+        ? `/profiles/${encodeURIComponent(seed.nickname)}`
+        : null
+    if (!url) {
       error.value = 'no-profile' // an anonymous counterpart has no account to show
       return
     }
     loading.value = true
     try {
-      const data = await apiFetch(`/profiles/${encodeURIComponent(seed.nickname)}`, {
-        headers: authHeaders(),
-      })
+      const data = await apiFetch(url, { headers: authHeaders() })
       profile.value = {
         name: data.name || seed.name,
         age: typeof data.age === 'number' ? data.age : '',
@@ -34,6 +37,9 @@ watch(
         bio: data.bio || '',
         interests: Array.isArray(data.interests) ? data.interests : [],
         avatar: data.avatar_url || seed.avatar || '',
+        instagram: data.instagram || '',
+        telegram: data.telegram || '',
+        phone: data.phone || '',
       }
     } catch (e) {
       error.value = e.status === 404 ? 'no-profile' : e.message || 'Could not load profile'
@@ -42,6 +48,21 @@ watch(
     }
   },
 )
+
+const contacts = computed(() => {
+  const p = profile.value
+  if (!p) return []
+  const out = []
+  if (p.instagram) out.push({ label: 'Instagram', value: p.instagram })
+  if (p.telegram) out.push({ label: 'Telegram', value: p.telegram })
+  if (p.phone) out.push({ label: 'Phone', value: p.phone })
+  return out
+})
+
+async function copyContact(value) {
+  const ok = await ui.copyText(value)
+  ui.showToast(ok ? 'Copied' : value)
+}
 
 function close() {
   ui.closeViewProfile()
@@ -88,9 +109,28 @@ function close() {
           </div>
         </template>
 
-        <div class="vp-note">
+        <template v-if="contacts.length">
+          <div class="vp-label">REACH THEM ON</div>
+          <div class="vp-contacts">
+            <button
+              v-for="c in contacts"
+              :key="c.label"
+              type="button"
+              class="vp-contact"
+              title="Copy"
+              @click="copyContact(c.value)"
+            >
+              <div class="vp-contact-body">
+                <div class="vp-contact-label">{{ c.label }}</div>
+                <div class="vp-contact-value">{{ c.value }}</div>
+              </div>
+              <Copy :size="15" class="vp-contact-copy" />
+            </button>
+          </div>
+        </template>
+        <div v-else class="vp-note">
           <ShieldCheck :size="16" class="vp-note-icon" />
-          <span>Contacts stay private — they're only shared once you both choose to.</span>
+          <span>No contact shared yet — it'll appear here once they add one.</span>
         </div>
       </template>
     </div>
@@ -245,6 +285,49 @@ function close() {
   line-height: 1.45;
 }
 .vp-note-icon {
+  flex: none;
+  color: var(--ml-accent-ink);
+}
+.vp-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vp-contact {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(139, 124, 246, 0.25);
+  background: rgba(139, 124, 246, 0.07);
+  border-radius: 14px;
+  padding: 11px 13px;
+}
+.vp-contact:hover {
+  background: rgba(139, 124, 246, 0.13);
+}
+.vp-contact-body {
+  flex: 1;
+  min-width: 0;
+}
+.vp-contact-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ml-eyebrow);
+}
+.vp-contact-value {
+  font-family: var(--ml-font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ml-ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vp-contact-copy {
   flex: none;
   color: var(--ml-accent-ink);
 }
