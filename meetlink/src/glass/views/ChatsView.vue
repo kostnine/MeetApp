@@ -24,8 +24,8 @@ function badge(conversation) {
 const sourceText = computed(() => {
   const c = chats.activeConversation
   if (!c) return ''
-  // If this chat began as a story reply, reflect that (and its direction).
-  const r = c.messages.find((m) => m.replyStory)?.replyStory
+  // If this chat answers a story, reflect that (and its direction).
+  const r = c.replyStory
   if (r) return r.mine ? `You replied to ${r.name}’s story` : `${r.name} replied to your story`
   return c.source === 'story' ? 'Started from a map story' : 'Started from a request note'
 })
@@ -208,25 +208,28 @@ function menuAction(kind) {
           >
             <Mail :size="13" /> {{ chats.activeConversation.contact }}
           </button>
+
+          <!-- the story this chat answers -->
+          <div v-if="chats.activeConversation.replyStory" class="story-quote">
+            <span
+              class="story-quote-bar"
+              :style="{ background: chats.activeConversation.replyStory.mine ? '#8b7cf6' : '#ec7fb6' }"
+            />
+            <div
+              class="story-quote-thumb"
+              :style="{ background: chats.activeConversation.replyStory.gradient || 'rgba(139,124,246,.2)' }"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="story-quote-text">{{ chats.activeConversation.replyStory.snippet }}</div>
+          </div>
+
           <div
             v-for="m in chats.activeConversation.messages"
             :key="m.id"
             class="msg-row"
             :class="m.sender === 'me' ? 'msg-row--me' : 'msg-row--them'"
           >
-            <template v-if="m.replyStory">
-              <div class="reply-q-label">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9 14L4 9l5-5M4 9h9a7 7 0 0 1 7 7v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                {{ m.replyStory.mine ? `You replied to ${m.replyStory.name}’s story` : `${m.replyStory.name} replied to your story` }}
-              </div>
-              <div class="reply-q">
-                <span class="reply-q-bar" :style="{ background: m.replyStory.mine ? '#8b7cf6' : '#ec7fb6' }" />
-                <div class="reply-q-thumb" :style="{ background: m.replyStory.gradient || 'rgba(139,124,246,.2)' }">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
-                </div>
-                <div class="reply-q-text">{{ m.replyStory.snippet }}</div>
-              </div>
-            </template>
             <div class="bubble" :class="m.sender === 'me' ? 'bubble--me' : 'bubble--them'">{{ m.text }}</div>
           </div>
           <div v-if="lastStatus" class="msg-status">{{ lastStatus }}</div>
@@ -599,49 +602,44 @@ function menuAction(kind) {
 }
 .msg-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 .msg-row--me {
-  align-items: flex-end;
+  justify-content: flex-end;
 }
 .msg-row--them {
-  align-items: flex-start;
+  justify-content: flex-start;
 }
-.reply-q-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ml-ink-3);
-  padding: 0 4px;
-}
-.reply-q {
+.story-quote {
+  align-self: center;
   display: flex;
   align-items: stretch;
-  gap: 9px;
-  max-width: 74%;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 8px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.75);
-  padding: 8px 11px 8px 9px;
+  padding: 9px 12px 9px 9px;
 }
-.reply-q-bar {
+.story-quote-bar {
   flex: none;
   width: 4px;
   border-radius: 999px;
 }
-.reply-q-thumb {
+.story-quote-thumb {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.reply-q-text {
+.story-quote-text {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
   font-size: 12.5px;
   color: #7c7493;
   line-height: 1.4;
