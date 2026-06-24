@@ -39,11 +39,13 @@ function counterpart(row, side) {
   return side === 'owner'
     ? {
         name: row.guest_name || row.guest_nickname || 'Someone',
+        nickname: row.guest_nickname || '',
         online: row.guest_status === 'online',
         avatar: row.guest_avatar || '',
       }
     : {
         name: row.owner_name || row.owner_nickname || 'Someone',
+        nickname: row.owner_nickname || '',
         online: row.owner_status === 'online',
         avatar: row.owner_avatar || '',
       }
@@ -75,6 +77,7 @@ function mapConversation(row, index) {
     myRead,
     otherRead,
     name: other.name,
+    nickname: other.nickname,
     mono: mono(other.name),
     avatar: other.avatar,
     gradient: SKIN_LIST[index % SKIN_LIST.length],
@@ -425,6 +428,7 @@ export const useChatsStore = defineStore('chats', () => {
       myRead,
       otherRead,
       name: other.name,
+      nickname: other.nickname,
       mono: mono(other.name),
       avatar: other.avatar,
       gradient: SKIN_LIST[conversations.value.length % SKIN_LIST.length],

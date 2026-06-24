@@ -100,7 +100,15 @@ function menuAction(kind) {
   } else if (kind === 'report') {
     ui.showToast('Reported')
   } else {
-    ui.showToast('Opening profile — coming soon')
+    // View profile → open the counterpart's PUBLIC profile (seeded from the chat).
+    ui.openViewProfile({
+      nickname: conversation?.nickname || '',
+      name: conversation?.name,
+      avatar: conversation?.avatar,
+      gradient: conversation?.gradient,
+      mono: conversation?.mono,
+      online: conversation?.online,
+    })
   }
 }
 </script>

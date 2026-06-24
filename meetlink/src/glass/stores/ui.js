@@ -15,6 +15,8 @@ export const useUiStore = defineStore('ui', () => {
   const showPostStory = ref(false)
   // Tap-a-person card on the map (avatar, distance, their line, Message / Send request).
   const selectedPerson = ref(null)
+  // "View profile" overlay — holds a seed { nickname, name, avatar, gradient, mono, online }.
+  const viewProfile = ref(null)
   // Full-screen story viewer (Instagram-style tap-through).
   const storyList = ref([])
   const storyIndex = ref(0)
@@ -72,6 +74,13 @@ export const useUiStore = defineStore('ui', () => {
     selectedPerson.value = null
   }
 
+  function openViewProfile(seed) {
+    viewProfile.value = seed || null
+  }
+  function closeViewProfile() {
+    viewProfile.value = null
+  }
+
   function openStoryViewer(list, index = 0, mine = false) {
     storyList.value = Array.isArray(list) ? list : []
     storyIndex.value = index
@@ -104,6 +113,7 @@ export const useUiStore = defineStore('ui', () => {
     selectedStory,
     showPostStory,
     selectedPerson,
+    viewProfile,
     init,
     showToast,
     openQr,
@@ -114,6 +124,8 @@ export const useUiStore = defineStore('ui', () => {
     closePostStory,
     openPerson,
     closePerson,
+    openViewProfile,
+    closeViewProfile,
     storyList,
     storyIndex,
     storyMine,
