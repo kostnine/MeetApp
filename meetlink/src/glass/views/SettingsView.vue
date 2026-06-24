@@ -74,16 +74,6 @@ function deleteAccount() {
         </div>
       </div>
 
-      <div class="field-label">BLOCKED USERS</div>
-      <div class="blocked-card">
-        <div v-if="!settings.blocked.length" class="blocked-empty">No blocked users.</div>
-        <div v-for="u in settings.blocked" :key="u.id" class="blocked-row">
-          <div class="blocked-avatar">{{ mono(u.name) }}</div>
-          <div class="blocked-name">{{ u.name }}</div>
-          <button type="button" class="unblock-btn" @click="settings.unblock(u.id)">Unblock</button>
-        </div>
-      </div>
-
       <button type="button" class="signout-btn" @click="signOut">Sign out</button>
       <button type="button" class="delete-btn" @click="deleteAccount">Delete account</button>
     </div>

@@ -18,6 +18,7 @@ export function connectSocket(nickname) {
 
   socket.on('messages:message', (payload) => useChatsStore().receiveMessage(payload))
   socket.on('messages:conversation', (row) => useChatsStore().receiveConversation(row))
+  socket.on('messages:read', (payload) => useChatsStore().receiveRead(payload))
   socket.on('requests:response', (payload) => useRequestsStore().receiveResponse(payload))
   socket.on('stories:new', (story) => useMapStore().receiveStory(story))
 

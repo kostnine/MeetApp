@@ -41,18 +41,29 @@ function viewMyStory() {
           <div class="profile-id">
             <div class="profile-name-row">
               <span class="profile-name">{{ me.profile.name }}</span>
-              <span class="profile-age">{{ me.profile.age }}</span>
+              <span v-if="me.profile.age" class="profile-age">{{ me.profile.age }}</span>
             </div>
             <div class="city-pill"><MapPin :size="13" /> {{ me.profile.city }}</div>
           </div>
         </div>
 
-        <p class="profile-bio">{{ me.profile.bio }}</p>
+        <p v-if="me.profile.bio" class="profile-bio">{{ me.profile.bio }}</p>
 
-        <div class="field-label">INTERESTS</div>
-        <div class="interest-chips">
-          <span v-for="tag in me.profile.interests" :key="tag" class="interest-chip">{{ tag }}</span>
-        </div>
+        <template v-if="me.profile.interests.length">
+          <div class="field-label">INTERESTS</div>
+          <div class="interest-chips">
+            <span v-for="tag in me.profile.interests" :key="tag" class="interest-chip">{{ tag }}</span>
+          </div>
+        </template>
+
+        <button
+          v-if="!me.profile.bio && !me.profile.interests.length"
+          type="button"
+          class="profile-empty"
+          @click="router.push({ name: 'profile-edit' })"
+        >
+          Add your age, a short bio and interests so people know who they’re meeting.
+        </button>
 
         <div class="privacy-note">
           <ShieldCheck :size="18" class="privacy-icon" />
@@ -182,6 +193,22 @@ function viewMyStory() {
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 999px;
   padding: 8px 14px;
+}
+.profile-empty {
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 16px;
+  border: 1px dashed rgba(139, 124, 246, 0.4);
+  background: rgba(139, 124, 246, 0.06);
+  font-family: var(--ml-font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ml-accent-ink-soft);
 }
 .privacy-note {
   display: flex;

@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BrandLogo from '../components/BrandLogo.vue'
@@ -10,7 +10,16 @@ const auth = useAuthStore()
 const mode = ref('login') // 'login' | 'register'
 const loading = ref(false)
 const error = ref('')
-const form = reactive({ identifier: '', nickname: '', email: '', password: '' })
+const form = reactive({ identifier: '', nickname: '', email: '', password: '', confirm: '' })
+
+// Live password strength (register only).
+const passwordChecks = computed(() => ({
+  length: form.password.length >= 8,
+  upper: /[A-Z]/.test(form.password),
+  number: /[0-9]/.test(form.password),
+  symbol: /[^A-Za-z0-9]/.test(form.password),
+}))
+const passwordStrong = computed(() => Object.values(passwordChecks.value).every(Boolean))
 
 function toggle() {
   mode.value = mode.value === 'login' ? 'register' : 'login'
@@ -20,18 +29,30 @@ function toggle() {
 async function submit() {
   if (loading.value) return
   error.value = ''
+  if (mode.value === 'register') {
+    if (!passwordStrong.value) {
+      error.value = 'Password needs 8+ characters, an uppercase letter, a number and a symbol.'
+      return
+    }
+    if (form.password !== form.confirm) {
+      error.value = 'Passwords don’t match.'
+      return
+    }
+  }
   loading.value = true
   try {
     if (mode.value === 'login') {
       await auth.login(form.identifier, form.password)
+      router.push('/map')
     } else {
       await auth.register({
         email: form.email.trim(),
         nickname: form.nickname.trim(),
         password: form.password,
       })
+      // Right after sign-up, open the profile setup (age, bio, photo).
+      router.push('/profile/edit')
     }
-    router.push('/map')
   } catch (e) {
     error.value = e.message || 'Something went wrong'
   } finally {
@@ -79,8 +100,27 @@ async function guest() {
 
         <label class="auth-label">PASSWORD</label>
         <div class="auth-input">
-          <input v-model="form.password" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <input
+            v-model="form.password"
+            type="password"
+            :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+            placeholder="••••••••"
+          />
         </div>
+
+        <ul v-if="mode === 'register' && form.password" class="auth-checks">
+          <li :class="{ ok: passwordChecks.length }">8+ characters</li>
+          <li :class="{ ok: passwordChecks.upper }">Uppercase letter</li>
+          <li :class="{ ok: passwordChecks.number }">Number</li>
+          <li :class="{ ok: passwordChecks.symbol }">Symbol</li>
+        </ul>
+
+        <template v-if="mode === 'register'">
+          <label class="auth-label">CONFIRM PASSWORD</label>
+          <div class="auth-input">
+            <input v-model="form.confirm" type="password" autocomplete="new-password" placeholder="••••••••" />
+          </div>
+        </template>
 
         <div v-if="error" class="auth-error">{{ error }}</div>
 
@@ -171,6 +211,37 @@ async function guest() {
   color: var(--ml-ink-1);
   font-family: var(--ml-font-body);
   font-size: 15px;
+}
+.auth-checks {
+  list-style: none;
+  margin: 10px 2px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+}
+.auth-checks li {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ml-ink-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.auth-checks li::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(120, 100, 170, 0.35);
+  flex: none;
+}
+.auth-checks li.ok {
+  color: var(--ml-success);
+}
+.auth-checks li.ok::before {
+  background: var(--ml-success);
+  border-color: var(--ml-success);
 }
 .auth-error {
   margin-top: 14px;

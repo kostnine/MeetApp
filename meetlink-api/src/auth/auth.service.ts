@@ -54,14 +54,7 @@ export class AuthService {
            p.name
          from created_user u
          join created_profile p on p.id = u.profile_id`,
-        [
-          nickname,
-          name,
-          'Можно предложить встречу, оставить контакт и дождаться подтверждения.',
-          email,
-          password.hash,
-          password.salt,
-        ],
+        [nickname, name, null, email, password.hash, password.salt],
       );
 
       return this.issueSession(result.rows[0]);

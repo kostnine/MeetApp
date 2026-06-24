@@ -122,7 +122,7 @@ export const useMeStore = defineStore('me', () => {
     profile.city = data.city || profile.city
     profile.cityShort = data.city || profile.cityShort
     profile.area = data.area || profile.area
-    profile.bio = data.bio || profile.bio
+    profile.bio = data.bio || ''
     profile.instagram = data.instagram || ''
     profile.telegram = data.telegram || ''
     profile.phone = data.phone || ''
@@ -133,8 +133,8 @@ export const useMeStore = defineStore('me', () => {
     approximateLocation.value = data.approximate_location ?? approximateLocation.value
     messagesFromNearby.value = data.messages_from_nearby ?? messagesFromNearby.value
     messagesFromRequests.value = data.messages_from_requests ?? messagesFromRequests.value
-    if (typeof data.age === 'number') profile.age = data.age
-    if (Array.isArray(data.interests)) profile.interests = data.interests
+    profile.age = typeof data.age === 'number' ? data.age : ''
+    profile.interests = Array.isArray(data.interests) ? data.interests : []
   }
 
   async function loadProfile() {

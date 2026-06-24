@@ -295,7 +295,8 @@ async function publish() {
   border-radius: 30px 30px 0 0;
   padding: 14px 22px 0;
   box-shadow: 0 -20px 50px rgba(96, 73, 168, 0.22);
-  animation: mlUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: bottom center;
+  animation: mlSheetPop 0.36s cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
 .post-drag {
   flex: none;

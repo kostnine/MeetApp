@@ -31,9 +31,13 @@ function youIcon(hasStory) {
 function storyIcon(story) {
   const size = story.size || 48
   const dot = story.online ? '<span class="lf-story__dot"></span>' : ''
+  // Show the person's avatar photo if they have one, else their initial.
+  const inner = story.avatar
+    ? `<img class="lf-story__img" src="${story.avatar}" alt="" />`
+    : `<span class="lf-story__mono">${story.mono}</span>`
   return L.divIcon({
     className: 'lf-icon',
-    html: `<div class="lf-story"><span class="lf-story__halo" style="background:${story.halo}"></span><span class="lf-story__av"><span class="lf-story__g" style="background:${story.gradient}"><span class="lf-story__mono">${story.mono}</span></span>${dot}</span></div>`,
+    html: `<div class="lf-story"><span class="lf-story__halo" style="background:${story.halo}"></span><span class="lf-story__av"><span class="lf-story__g" style="background:${story.gradient}">${inner}</span>${dot}</span></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   })

@@ -260,8 +260,13 @@ export const useChatsStore = defineStore('chats', () => {
         conversation.side = 'owner'
         conversation.otherRead = readTimes(created, 'owner').otherRead
         conversation.source = mapSource(created.source)
-        const serverMsgs = (created.messages || []).map((m) => mapMessage(m, 'owner', conversation.otherRead))
-        if (serverMsgs.length) conversation.messages = serverMsgs
+        // Replace just the optimistic message with the server's — KEEP earlier messages
+        // (e.g. the request reply) instead of wiping the whole thread.
+        const serverMsg = (created.messages || [])[0]
+        const idx = conversation.messages.indexOf(local)
+        if (serverMsg && idx !== -1) {
+          conversation.messages.splice(idx, 1, mapMessage(serverMsg, 'owner', conversation.otherRead))
+        }
         if (activeId.value !== created.id) activeId.value = created.id
       } catch {
         // keep the optimistic local message if creation fails
@@ -308,6 +313,19 @@ export const useChatsStore = defineStore('chats', () => {
       if (viewingNow) markRead(convId)
       else conversation.unread = (conversation.unread || 0) + 1
     }
+  }
+
+  // Realtime: the other person read the chat → my sent messages flip to "Seen".
+  function receiveRead(payload) {
+    const convId = payload?.conversation_id
+    const side = payload?.side
+    if (!convId || !side) return
+    const conversation = conversations.value.find((c) => c.id === convId)
+    if (!conversation || side === conversation.side) return
+    conversation.otherRead = new Date().toISOString()
+    conversation.messages.forEach((m) => {
+      if (m.sender === 'me') m.seen = true
+    })
   }
 
   function receiveConversation(row) {
@@ -442,5 +460,6 @@ export const useChatsStore = defineStore('chats', () => {
     startFromRequest,
     receiveMessage,
     receiveConversation,
+    receiveRead,
   }
 })

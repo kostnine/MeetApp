@@ -109,6 +109,21 @@ body {
     opacity: 1;
   }
 }
+/* Bottom sheet "pops out" — rises with a slight scale + overshoot. */
+@keyframes mlSheetPop {
+  0% {
+    transform: translateY(46px) scale(0.95);
+    opacity: 0;
+  }
+  62% {
+    transform: translateY(-5px) scale(1.012);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
 @keyframes mlPop {
   0% {
     transform: scale(0.92);
@@ -274,6 +289,13 @@ body {
   font-weight: 700;
   font-size: 15px;
   color: #fff;
+}
+.lf-story__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
 }
 .lf-story__dot {
   position: absolute;

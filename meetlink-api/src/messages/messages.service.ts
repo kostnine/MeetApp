@@ -200,7 +200,16 @@ export class MessagesService {
         [conversationId, viewerProfileId],
       );
     }
-    return this.getConversation(conversationId, viewerProfileId);
+    const conversation = await this.getConversation(conversationId, viewerProfileId);
+    if (viewerProfileId && conversation) {
+      // Tell the other side their messages were seen (live "Seen" status).
+      const ownerId = (conversation as Record<string, any>).owner_profile_id;
+      this.realtime.emitRead({
+        conversation_id: conversationId,
+        side: ownerId === viewerProfileId ? 'owner' : 'guest',
+      });
+    }
+    return conversation;
   }
 
   async setBlocked(conversationId: string, blocked: boolean, ownerProfileId?: string) {

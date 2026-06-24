@@ -66,4 +66,8 @@ export class OnlineGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitStory(story: Record<string, any>) {
     this.server.emit('stories:new', story);
   }
+
+  emitRead(payload: Record<string, any>) {
+    this.server.emit('messages:read', payload);
+  }
 }
