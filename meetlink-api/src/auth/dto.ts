@@ -26,8 +26,13 @@ export class RegisterDto {
   @MaxLength(60)
   name?: string;
 
+  // Enforce the same strength rules the client shows, server-side — so the API can't be
+  // used to create weak-password accounts that bypass the UI checklist.
   @IsString()
-  @MinLength(6)
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(128)
+  @Matches(/[A-Z]/, { message: 'Password must contain an uppercase letter' })
+  @Matches(/[0-9]/, { message: 'Password must contain a number' })
+  @Matches(/[^A-Za-z0-9]/, { message: 'Password must contain a symbol' })
   password!: string;
 }

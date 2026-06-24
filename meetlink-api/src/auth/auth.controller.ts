@@ -3,17 +3,21 @@ import { AdminGuard } from './admin.guard';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto';
 import { AuthenticatedRequest } from './auth.types';
+import { RateLimit } from '../common/rate-limit.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
+  @UseGuards(RateLimit(15, 60_000))
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
+  // Rate-limited to blunt password guessing (generous enough for normal + guest login).
   @Post('login')
+  @UseGuards(RateLimit(20, 60_000))
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.identifier, dto.password);
   }

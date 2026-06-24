@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest, AuthTokenPayload } from './auth.types';
+import { resolveJwtSecret } from './jwt-secret';
 
 /**
  * Populates request.user when a valid bearer token is present, but NEVER rejects.
@@ -22,9 +23,7 @@ export class OptionalAuthGuard implements CanActivate {
 
     if (bearerToken) {
       try {
-        const secret = this.config.get<string>('ADMIN_JWT_SECRET')
-          || this.config.get<string>('ADMIN_TOKEN')
-          || 'meetlink-dev-secret-change-me';
+        const secret = resolveJwtSecret(this.config);
         const payload = jwt.verify(bearerToken, secret);
 
         if (

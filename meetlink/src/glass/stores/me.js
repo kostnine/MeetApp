@@ -193,8 +193,31 @@ export const useMeStore = defineStore('me', () => {
     draft.avatar = ''
   }
 
+  // Blank the profile on logout / account switch so the next account never inherits the
+  // previous user's name, avatar or contacts (loadProfile then fills it from the backend).
+  function reset() {
+    profile.name = ''
+    profile.age = ''
+    profile.city = ''
+    profile.cityShort = ''
+    profile.area = ''
+    profile.bio = ''
+    profile.interests = []
+    profile.instagram = ''
+    profile.telegram = ''
+    profile.phone = ''
+    profile.avatar = ''
+    showOnMap.value = true
+    allowMessages.value = true
+    contactsAfterApproval.value = true
+    approximateLocation.value = true
+    messagesFromNearby.value = true
+    messagesFromRequests.value = true
+  }
+
   return {
     profile,
+    reset,
     showOnMap,
     allowMessages,
     contactsAfterApproval,

@@ -130,7 +130,8 @@ export async function guestLogin() {
   const creds = {
     email: `guest_${rand}@guest.meetlink`,
     nickname: `guest_${rand}`,
-    password: `g${rand}${rand}`,
+    // Must satisfy the server password rules (8+, uppercase, number, symbol).
+    password: `G${rand}7!`,
   }
   const data = await apiFetch('/auth/register', {
     method: 'POST',

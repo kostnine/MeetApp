@@ -21,11 +21,13 @@ const listWidth = computed(() => (ui.isDesktop ? '340px' : '100%'))
 function badge(conversation) {
   return conversation.source === 'story' ? 'Story' : 'Request'
 }
-// Short centered context pill.
+// Short centered context pill. After a reload the conversation-level flag is gone, so fall
+// back to a persisted reply-story on any loaded message.
 const sourceText = computed(() => {
   const c = chats.activeConversation
   if (!c) return ''
-  if (c.replyStory) return c.replyStory.mine ? 'You replied to a story' : 'Replied to your story'
+  const r = c.replyStory || c.messages?.find((m) => m.replyStory)?.replyStory
+  if (r) return r.mine ? 'You replied to a story' : 'Replied to your story'
   return c.source === 'story' ? 'Started from a map story' : 'Started from a request note'
 })
 

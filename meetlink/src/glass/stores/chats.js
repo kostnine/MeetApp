@@ -99,7 +99,18 @@ function mapMessage(row, side = 'owner', otherRead = null) {
     text: row.body,
     at: row.created_at,
     seen: mine && !!otherRead && !!row.created_at && new Date(row.created_at) <= new Date(otherRead),
+    // Persisted story-reply context → the quoted-story block survives reload. `mine` is
+    // per-viewer (whether the reply message is the viewer's own).
+    replyStory: row.reply_story ? { ...row.reply_story, mine } : undefined,
   }
+}
+
+// Trim a reply-story for sending/persisting: small fields only, and an image ONLY when it's
+// already an http(s) URL (never a base64 data-URL — that would re-bloat the DB).
+function sendableReplyStory(rs) {
+  if (!rs) return undefined
+  const image = typeof rs.image === 'string' && /^https?:\/\//i.test(rs.image) ? rs.image : null
+  return { name: rs.name, snippet: rs.snippet, gradient: rs.gradient, image }
 }
 
 const SEED = [
@@ -295,6 +306,7 @@ export const useChatsStore = defineStore('chats', () => {
             contact: conversation.contact || undefined,
             sender: 'owner',
             body: text,
+            replyStory: sendableReplyStory(local.replyStory),
           }),
         })
         conversation.id = created.id
@@ -333,7 +345,7 @@ export const useChatsStore = defineStore('chats', () => {
       const created = await apiFetch(`/messages/conversations/${conversation.id}/messages`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ sender: conversation.side || 'owner', body: text }),
+        body: JSON.stringify({ sender: conversation.side || 'owner', body: text, replyStory: sendableReplyStory(local.replyStory) }),
       })
       const index = conversation.messages.indexOf(local)
       if (index !== -1) {
@@ -397,6 +409,10 @@ export const useChatsStore = defineStore('chats', () => {
 
   function receiveConversation(row) {
     if (!row?.id || conversations.value.some((c) => c.id === row.id)) return
+    // Defense-in-depth: only render a conversation the viewer actually participates in,
+    // so a stray/global socket emit can never surface someone else's chat.
+    const myId = useAuthStore().user?.profileId
+    if (!myId || (row.owner_profile_id !== myId && row.guest_profile_id !== myId)) return
     const side = viewerSide(row)
     const other = counterpart(row, side)
     const { myRead, otherRead } = readTimes(row, side)
@@ -527,6 +543,16 @@ export const useChatsStore = defineStore('chats', () => {
     return conversation.id
   }
 
+  // Wipe all in-memory chat state — called on logout / account switch so a new account
+  // never sees the previous account's conversations.
+  function reset() {
+    conversations.value = []
+    activeId.value = null
+    search.value = ''
+    tab.value = 'all'
+    draft.value = ''
+  }
+
   return {
     conversations,
     activeId,
@@ -550,5 +576,6 @@ export const useChatsStore = defineStore('chats', () => {
     receiveMessage,
     receiveConversation,
     receiveRead,
+    reset,
   }
 })

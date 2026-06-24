@@ -4,10 +4,15 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import { resolveJwtSecret } from './auth/jwt-secret';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+
+  // Fail fast at startup if a production deploy is missing a real JWT secret, rather than
+  // silently signing forgeable tokens with the public default.
+  resolveJwtSecret(config);
 
   // All HTTP API routes live under /api, so the same origin can also serve the SPA.
   app.setGlobalPrefix('api');

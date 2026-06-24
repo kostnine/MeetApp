@@ -42,8 +42,10 @@ export class ProfilesController {
     return this.profiles.updateProfilePhoto(request.user?.profileId, id, dto);
   }
 
+  // Public profile lookup — returns a contacts-free projection (IG/Telegram/phone are shared
+  // only after approval, so they must never appear here).
   @Get(':nickname')
   findByNickname(@Param('nickname') nickname: string) {
-    return this.profiles.findByNickname(nickname.replace(/^@/, ''));
+    return this.profiles.findPublicByNickname(nickname.replace(/^@/, ''));
   }
 }

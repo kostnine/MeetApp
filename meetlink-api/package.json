@@ -6,6 +6,8 @@
     "start": "node dist/main.js",
     "dev": "nest start --watch",
     "build": "nest build",
+    "pretest": "nest build",
+    "test": "node --test \"test/**/*.test.js\"",
     "migration:print": "node scripts/print-migration.mjs",
     "db:test": "node scripts/test-db.mjs"
   },

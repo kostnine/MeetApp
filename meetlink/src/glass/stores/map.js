@@ -219,6 +219,13 @@ export const useMapStore = defineStore('map', () => {
     }
   }
 
+  // Wipe in-memory map state on logout / account switch.
+  function reset() {
+    stories.value = []
+    myStories.value = []
+    hiddenIds.value = []
+  }
+
   return {
     radius,
     view,
@@ -238,5 +245,6 @@ export const useMapStore = defineStore('map', () => {
     load,
     publishStory,
     receiveStory,
+    reset,
   }
 })

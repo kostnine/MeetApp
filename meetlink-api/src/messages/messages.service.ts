@@ -4,6 +4,22 @@ import { OnlineGateway } from '../online/online.gateway';
 import { ProfilesService } from '../profiles/profiles.service';
 import { SendMessageDto, StartConversationDto } from './dto';
 
+// Cap the client-supplied reply-story metadata and NEVER persist a base64 image (only an
+// http(s) URL) so it can't re-bloat the DB. `mine` is derived per-viewer on the client.
+export function sanitizeReplyStory(rs: unknown): Record<string, unknown> | null {
+  if (!rs || typeof rs !== 'object') return null;
+  const r = rs as Record<string, any>;
+  const image = typeof r.image === 'string' && /^https?:\/\//i.test(r.image) ? r.image.slice(0, 600) : null;
+  const out = {
+    name: String(r.name ?? '').slice(0, 80),
+    snippet: String(r.snippet ?? '').slice(0, 300),
+    gradient: String(r.gradient ?? '').slice(0, 200),
+    image,
+  };
+  if (!out.name && !out.snippet && !out.image) return null;
+  return out;
+}
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -13,27 +29,31 @@ export class MessagesService {
   ) {}
 
   // Find the real account a guest name refers to (so the recipient sees the chat too).
+  // Match ONLY on the unique `nickname` (never the non-unique display `name`) and refuse
+  // to link on an ambiguous result — otherwise a stranger whose display name collides with
+  // a guest alias would silently become a participant in someone else's chat.
   private async resolveGuestProfile(name: string, excludeOwnerId: string) {
     const result = await this.db.query<{ id: string }>(
       `select id from profiles
-       where id <> $2 and (lower(nickname) = lower($1) or lower(name) = lower($1))
-       limit 1`,
+       where id <> $2 and lower(nickname) = lower($1)`,
       [name, excludeOwnerId],
     );
-    return result.rows[0] ?? null;
+    return result.rows.length === 1 ? result.rows[0] : null;
   }
 
-  async startConversation(dto: StartConversationDto, ownerProfileId?: string) {
+  // trustedGuestProfileId comes ONLY from a server-verified actor (e.g. the authenticated
+  // responder in requests.service). Never accept a guest profile id from the client body.
+  async startConversation(dto: StartConversationDto, ownerProfileId?: string, trustedGuestProfileId?: string) {
     const owner = ownerProfileId
       ? await this.profiles.findById(ownerProfileId)
       : dto.ownerNickname
       ? await this.profiles.findByNickname(dto.ownerNickname)
       : await this.profiles.findAdminProfile();
     const guestNickname = dto.guestNickname?.trim() || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
-    // Prefer an explicit linked profile (a signed-in actor); never link the chat to
-    // the owner themselves. Fall back to matching the guest by nickname.
+    // Prefer the explicit, server-verified linked profile; never link the chat to the owner
+    // themselves. Otherwise fall back to a UNIQUE nickname match.
     const explicitGuestId =
-      dto.guestProfileId && dto.guestProfileId !== owner.id ? dto.guestProfileId : null;
+      trustedGuestProfileId && trustedGuestProfileId !== owner.id ? trustedGuestProfileId : null;
     const guestProfile = explicitGuestId
       ? { id: explicitGuestId }
       : await this.resolveGuestProfile(guestNickname, owner.id);
@@ -51,10 +71,12 @@ export class MessagesService {
     );
 
     const conversation = conversationResult.rows[0];
-    await this.addMessage(conversation.id, {
-      sender: dto.sender ?? 'guest',
-      body: dto.body,
-    });
+    // Scope the internal first-message insert to the owner (trusted) rather than fail-open.
+    await this.addMessage(
+      conversation.id,
+      { sender: dto.sender ?? 'guest', body: dto.body, replyStory: dto.replyStory },
+      owner.id,
+    );
 
     // Broadcast + return a fully-joined conversation so BOTH clients can render names.
     const full = await this.getConversation(conversation.id);
@@ -64,14 +86,12 @@ export class MessagesService {
   }
 
   async listConversations(viewerProfileId?: string) {
-    const params: unknown[] = [];
-    let where = '';
-
-    if (viewerProfileId) {
-      params.push(viewerProfileId);
-      // The viewer may be the owner OR the linked recipient.
-      where = 'where (c.owner_profile_id = $1 or c.guest_profile_id = $1)';
-    }
+    // A viewer profile is REQUIRED. Without it we must NOT fall through to an unscoped
+    // query that returns every account's conversations — return nothing instead.
+    if (!viewerProfileId) return [];
+    const params: unknown[] = [viewerProfileId];
+    // The viewer may be the owner OR the linked recipient.
+    const where = 'where (c.owner_profile_id = $1 or c.guest_profile_id = $1)';
 
     const result = await this.db.query(
       `select
@@ -159,7 +179,7 @@ export class MessagesService {
     }
 
     const conversation = await this.db.query(
-      `select id, blocked
+      `select id, blocked, owner_profile_id, guest_profile_id
        from conversations
        where id = $1
        ${viewerWhere}`,
@@ -174,11 +194,12 @@ export class MessagesService {
       throw new BadRequestException('Conversation is blocked');
     }
 
+    const replyStory = sanitizeReplyStory(dto.replyStory);
     const result = await this.db.query(
-      `insert into messages (conversation_id, sender, body)
-       values ($1, $2, $3)
+      `insert into messages (conversation_id, sender, body, reply_story)
+       values ($1, $2, $3, $4::jsonb)
        returning *`,
-      [conversationId, dto.sender, dto.body],
+      [conversationId, dto.sender, dto.body, replyStory ? JSON.stringify(replyStory) : null],
     );
 
     await this.db.query(
@@ -192,6 +213,8 @@ export class MessagesService {
 
     this.realtime.emitMessage({
       conversation_id: conversationId,
+      owner_profile_id: conversation.rows[0].owner_profile_id,
+      guest_profile_id: conversation.rows[0].guest_profile_id,
       message,
     });
 
@@ -211,11 +234,13 @@ export class MessagesService {
     }
     const conversation = await this.getConversation(conversationId, viewerProfileId);
     if (viewerProfileId && conversation) {
-      // Tell the other side their messages were seen (live "Seen" status).
-      const ownerId = (conversation as Record<string, any>).owner_profile_id;
+      // Tell the other side their messages were seen (live "Seen" status) — scoped to the two.
+      const conv = conversation as Record<string, any>;
       this.realtime.emitRead({
         conversation_id: conversationId,
-        side: ownerId === viewerProfileId ? 'owner' : 'guest',
+        owner_profile_id: conv.owner_profile_id,
+        guest_profile_id: conv.guest_profile_id,
+        side: conv.owner_profile_id === viewerProfileId ? 'owner' : 'guest',
       });
     }
     return conversation;

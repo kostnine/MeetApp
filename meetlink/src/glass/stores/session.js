@@ -28,8 +28,15 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
+  // Clear ALL in-memory data so the next account starts from a blank slate (no cross-account
+  // leakage of chats/requests/stories/profile), and allow loadData() to run again.
   function reset() {
     loaded = false
+    apiError.value = ''
+    useChatsStore().reset()
+    useRequestsStore().reset()
+    useMapStore().reset()
+    useMeStore().reset()
   }
 
   return { apiError, loadData, reset }

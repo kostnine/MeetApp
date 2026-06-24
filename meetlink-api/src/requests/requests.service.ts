@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service';
 import { MessagesService } from '../messages/messages.service';
 import { OnlineGateway } from '../online/online.gateway';
@@ -11,8 +12,10 @@ type MeetRequestRow = Record<string, any> & {
   owner_nickname: string;
 };
 
+// Unguessable share code (crypto-random, 16 hex chars ≈ 64 bits) — not enumerable.
+// Old 6-char Math.random codes keep working (looked up by exact match).
 function makeCode() {
-  return Math.random().toString(36).slice(2, 8);
+  return randomBytes(8).toString('hex');
 }
 
 @Injectable()
@@ -72,21 +75,16 @@ export class RequestsService {
   }
 
   async listForOwner(ownerProfileId?: string) {
-    const params: unknown[] = [];
-    let where = '';
-
-    if (ownerProfileId) {
-      params.push(ownerProfileId);
-      where = 'where r.owner_profile_id = $1';
-    }
-
+    // Owner is REQUIRED — without it we must NOT return every account's requests and their
+    // responders' private contact/messages.
+    if (!ownerProfileId) return [];
     const result = await this.db.query<MeetRequestRow>(
       `select r.*, p.nickname as owner_nickname, p.name as owner_name
        from meet_requests r
        join profiles p on p.id = r.owner_profile_id
-       ${where}
+       where r.owner_profile_id = $1
        order by r.created_at desc`,
-      params,
+      [ownerProfileId],
     );
 
     return Promise.all(result.rows.map((row) => this.withResponses(row)));
@@ -111,6 +109,27 @@ export class RequestsService {
     }
 
     return this.withResponses(request);
+  }
+
+  // Public link page: expose only what a responder needs to reply. Never include
+  // prior responders' contact/messages or the raw owner row.
+  async findPublicByCode(code: string) {
+    const result = await this.db.query<MeetRequestRow>(
+      `select r.id, r.code, r.type, r.message, r.looking_for, r.place,
+              r.display_as, r.custom_name, r.status, r.created_at, r.contact,
+              p.nickname as owner_nickname, p.name as owner_name
+       from meet_requests r
+       join profiles p on p.id = r.owner_profile_id
+       where r.code = $1`,
+      [code],
+    );
+
+    const request = result.rows[0];
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    return request;
   }
 
   async respond(code: string, dto: RespondToMeetRequestDto, responderProfileId?: string) {
@@ -152,15 +171,18 @@ export class RequestsService {
     // Open a real conversation when the request is accepted OR a signed-in person
     // replies — so a logged-in reply is instantly a linked, two-way chat.
     if (accepted || responder) {
-      conversation = await this.messages.startConversation({
-        ownerNickname: request.owner_nickname,
-        guestNickname: responder?.nickname || alias,
-        guestProfileId: responder?.id,
-        contact: contact || undefined,
-        body: message,
-        sender: 'guest',
-        source: 'request',
-      });
+      conversation = await this.messages.startConversation(
+        {
+          ownerNickname: request.owner_nickname,
+          guestNickname: responder?.nickname || alias,
+          contact: contact || undefined,
+          body: message,
+          sender: 'guest',
+          source: 'request',
+        },
+        undefined,
+        responder?.id, // trusted (server-verified) guest profile id, or undefined
+      );
 
       const responseResult = await this.db.query(
         `update meet_request_responses
@@ -179,6 +201,7 @@ export class RequestsService {
 
     this.realtime.emitRequestResponse({
       request_code: request.code,
+      owner_profile_id: (request as Record<string, any>).owner_profile_id,
       response: payload,
     });
 

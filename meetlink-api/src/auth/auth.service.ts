@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { DbService } from '../db/db.service';
 import { RegisterDto } from './dto';
 import { AuthTokenPayload, UserRole } from './auth.types';
+import { resolveJwtSecret } from './jwt-secret';
 
 interface UserRow {
   id: string;
@@ -197,9 +198,7 @@ export class AuthService {
   }
 
   private jwtSecret() {
-    return this.config.get<string>('ADMIN_JWT_SECRET')
-      || this.config.get<string>('ADMIN_TOKEN')
-      || 'meetlink-dev-secret-change-me';
+    return resolveJwtSecret(this.config);
   }
 
   private adminNickname() {

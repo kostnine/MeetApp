@@ -1,5 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { offloadImage } from '../common/image-storage';
 import { AddProfilePhotoDto, UpdateProfileDto, UpdateProfilePhotoDto } from './dto';
 
 export interface ProfileRow {
@@ -69,6 +70,27 @@ export class ProfilesService {
     return this.withPhotos(profile);
   }
 
+  // Public profile view (GET /profiles/:nickname): expose only public fields. NEVER return
+  // instagram/telegram/phone — those are shared only after the owner approves someone.
+  async findPublicByNickname(nickname: string) {
+    const result = await this.db.query(
+      `select id, nickname, name, avatar_url,
+         coalesce(avatar_position_x, 50) as avatar_position_x,
+         coalesce(avatar_position_y, 50) as avatar_position_y,
+         bio, city, area, status, age, coalesce(interests, '[]'::jsonb) as interests
+       from profiles
+       where nickname = $1`,
+      [nickname],
+    );
+
+    const profile = result.rows[0];
+    if (!profile) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    return this.withPhotos(profile as ProfileRow);
+  }
+
   async findAdminProfile(): Promise<ProfileRow> {
     const result = await this.db.query<ProfileRow>(
       `select id, nickname, name, avatar_url,
@@ -123,12 +145,19 @@ export class ProfilesService {
   }
 
   async findOwnProfile(profileId?: string): Promise<ProfileRow> {
-    return profileId ? this.findById(profileId) : this.findAdminProfile();
+    // "My profile" requires knowing who the caller is. Never silently fall back to the
+    // admin profile (that let a profile-less principal read/edit the admin's profile).
+    if (!profileId) throw new UnauthorizedException('A user profile is required');
+    return this.findById(profileId);
   }
 
   async updateProfile(profileId: string | undefined, dto: UpdateProfileDto): Promise<ProfileRow> {
     const owner = await this.findOwnProfile(profileId);
     const nickname = dto.nickname?.trim().replace(/^@/, '') || owner.nickname;
+    // Offload a freshly-picked avatar (base64 data-URL) to object storage; an already-stored
+    // URL re-sent by the client is returned unchanged (no re-upload), undefined → keep current.
+    const avatarUrl =
+      dto.avatarUrl !== undefined ? await offloadImage(dto.avatarUrl, 'avatars') : owner.avatar_url;
 
     try {
       const result = await this.db.query<ProfileRow>(
@@ -178,7 +207,7 @@ export class ProfilesService {
           dto.area?.trim() || null,
           dto.showOnMap ?? owner.show_on_map,
           dto.visibilityRadiusMeters ?? owner.visibility_radius_meters ?? 1000,
-          dto.avatarUrl ?? owner.avatar_url,
+          avatarUrl,
           dto.avatarPositionX ?? owner.avatar_position_x ?? 50,
           dto.avatarPositionY ?? owner.avatar_position_y ?? 50,
           dto.age ?? null,
@@ -207,6 +236,7 @@ export class ProfilesService {
 
   async addProfilePhoto(profileId: string | undefined, dto: AddProfilePhotoDto): Promise<ProfilePhotoRow> {
     const owner = await this.findOwnProfile(profileId);
+    const imageUrl = await offloadImage(dto.imageUrl, 'photos');
     const orderResult = await this.db.query(
       `select coalesce(max(sort_order), -1) + 1 as next_order
        from profile_photos
@@ -220,7 +250,7 @@ export class ProfilesService {
        returning *`,
       [
         owner.id,
-        dto.imageUrl,
+        imageUrl,
         dto.caption?.trim() || null,
         orderResult.rows[0]?.next_order ?? 0,
         dto.positionX ?? 50,
@@ -261,6 +291,7 @@ export class ProfilesService {
     dto: UpdateProfilePhotoDto,
   ): Promise<ProfilePhotoRow> {
     const owner = await this.findOwnProfile(profileId);
+    const imageUrl = dto.imageUrl ? await offloadImage(dto.imageUrl, 'photos') : null;
     const result = await this.db.query<ProfilePhotoRow>(
       `update profile_photos
        set image_url = coalesce($3, image_url),
@@ -275,7 +306,7 @@ export class ProfilesService {
       [
         photoId,
         owner.id,
-        dto.imageUrl || null,
+        imageUrl,
         dto.caption?.trim() || null,
         dto.positionX ?? null,
         dto.positionY ?? null,

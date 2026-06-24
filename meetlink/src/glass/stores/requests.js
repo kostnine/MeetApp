@@ -329,11 +329,21 @@ export const useRequestsStore = defineStore('requests', () => {
     response.status = 'archived'
   }
 
+  // Wipe in-memory request state on logout / account switch.
+  function reset() {
+    requests.value = []
+    responses.value = []
+    generated.value = null
+    mode.value = 'list'
+    tab.value = 'mine'
+  }
+
   return {
     mode,
     tab,
     requests,
     responses,
+    reset,
     draft,
     generated,
     mineList,

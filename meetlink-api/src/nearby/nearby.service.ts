@@ -61,14 +61,17 @@ export class NearbyService {
          p.nickname,
          p.name,
          p.avatar_url,
-         p.instagram,
-         p.telegram,
-         p.phone,
          p.city,
          p.area,
          p.status,
-         extensions.ST_Y(ul.location::extensions.geometry) as lat,
-         extensions.ST_X(ul.location::extensions.geometry) as lng,
+         -- Honor each profile's approximate_location preference; never return private
+         -- contact fields (instagram/telegram/phone) in open discovery.
+         case when coalesce(p.approximate_location, true)
+           then round(extensions.ST_Y(ul.location::extensions.geometry)::numeric, 3)
+           else extensions.ST_Y(ul.location::extensions.geometry)::numeric end as lat,
+         case when coalesce(p.approximate_location, true)
+           then round(extensions.ST_X(ul.location::extensions.geometry)::numeric, 3)
+           else extensions.ST_X(ul.location::extensions.geometry)::numeric end as lng,
          round(extensions.ST_Distance(ul.location, origin.geo))::int as distance_meters,
          ul.last_seen_at
        from user_locations ul

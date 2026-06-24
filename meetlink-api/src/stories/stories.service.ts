@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { offloadImage } from '../common/image-storage';
 import { OnlineGateway } from '../online/online.gateway';
 import { ProfilesService } from '../profiles/profiles.service';
 import { CreateStoryDto } from './dto';
@@ -87,6 +88,9 @@ export class StoriesService {
     }
 
     const owner = await this.profiles.findOwnProfile(ownerProfileId);
+    // Offload a base64 photo to object storage; store just the URL (falls back to the
+    // data-URL if storage isn't configured).
+    const storedImage = image ? await offloadImage(image, 'stories') : null;
     const result = await this.db.query(
       `insert into stories (owner_profile_id, text, place, visible_for, who_can_message, expires_at, image_url)
        values ($1, $2, $3, $4, $5, $6, $7)
@@ -98,7 +102,7 @@ export class StoriesService {
         dto.visibleFor || '1h',
         dto.whoCanMessage || 'everyone',
         durationToExpiry(dto.visibleFor),
-        image,
+        storedImage,
       ],
     );
 

@@ -17,6 +17,10 @@ export const useAuthStore = defineStore('auth', () => {
   let restorePromise = null
 
   async function enter() {
+    // Drop any previous account's socket (so we don't reuse its token/rooms) and clear all
+    // in-memory data before loading THIS account's — prevents cross-account leakage.
+    disconnectSocket()
+    useSessionStore().reset()
     await useSessionStore().loadData()
     connectSocket(user.value?.nickname)
   }
