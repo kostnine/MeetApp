@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DbService } from '../db/db.service';
+import { OnlineGateway } from '../online/online.gateway';
 import { ProfilesService } from '../profiles/profiles.service';
 import { CreateStoryDto } from './dto';
 
@@ -32,6 +33,7 @@ export class StoriesService {
   constructor(
     private readonly db: DbService,
     private readonly profiles: ProfilesService,
+    private readonly realtime: OnlineGateway,
   ) {}
 
   // Active stories from everyone except the viewer (you are the centre marker).
@@ -100,6 +102,14 @@ export class StoriesService {
       ],
     );
 
-    return mapStory({ ...result.rows[0], owner_name: owner.name, owner_nickname: owner.nickname });
+    const story = mapStory({
+      ...result.rows[0],
+      owner_name: owner.name,
+      owner_nickname: owner.nickname,
+      owner_status: owner.status,
+    });
+    // Broadcast so nearby viewers see it instantly (no page reload).
+    this.realtime.emitStory({ ...story, ownerProfileId: owner.id });
+    return story;
   }
 }

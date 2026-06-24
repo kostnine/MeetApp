@@ -71,6 +71,7 @@ function mapConversation(row, index) {
     gradient: SKIN_LIST[index % SKIN_LIST.length],
     online: other.online,
     source: mapSource(row.source),
+    contact: row.contact || '',
     unread: isUnread(row, side, myRead) ? 1 : 0,
     blocked: !!row.blocked,
     lastMessage: row.last_message || '',
@@ -247,7 +248,8 @@ export const useChatsStore = defineStore('chats', () => {
           headers: authHeaders(),
           body: JSON.stringify({
             guestNickname: conversation.nickname || conversation.name,
-            source: 'map',
+            source: conversation.source === 'request' ? 'request' : 'map',
+            contact: conversation.contact || undefined,
             sender: 'owner',
             body: text,
           }),
@@ -380,6 +382,44 @@ export const useChatsStore = defineStore('chats', () => {
     return conversation.id
   }
 
+  // Open (or create) a thread for a request reply — keeps their contact + first message.
+  function startFromRequest(reply) {
+    // If this reply already has a real conversation, open that one.
+    if (reply.conversationId) {
+      const linked = conversations.value.find((c) => c.id === reply.conversationId)
+      if (linked) {
+        selectChat(linked.id, { read: false })
+        return linked.id
+      }
+    }
+    const existing = conversations.value.find(
+      (c) => c.source === 'request' && c.name === reply.name && c.contact === (reply.contact || ''),
+    )
+    if (existing) {
+      selectChat(existing.id, { read: false })
+      return existing.id
+    }
+    const conversation = {
+      id: `req-${reply.id}-${nextId()}`,
+      side: 'owner',
+      name: reply.name || 'Someone',
+      nickname: reply.name || 'Someone',
+      contact: reply.contact || '',
+      mono: mono(reply.name),
+      gradient: reply.gradient || SKIN_LIST[conversations.value.length % SKIN_LIST.length],
+      online: false,
+      source: 'request',
+      unread: 0,
+      messages:
+        reply.message && reply.message !== 'Opened your link.'
+          ? [{ id: nextId(), sender: 'them', text: reply.message, at: new Date().toISOString(), seen: false }]
+          : [],
+    }
+    conversations.value.unshift(conversation)
+    selectChat(conversation.id, { read: false })
+    return conversation.id
+  }
+
   return {
     conversations,
     activeId,
@@ -399,6 +439,7 @@ export const useChatsStore = defineStore('chats', () => {
     deleteChat,
     setBlocked,
     startFromStory,
+    startFromRequest,
     receiveMessage,
     receiveConversation,
   }

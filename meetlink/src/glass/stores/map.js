@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiFetch, authHeaders } from '../api'
+import { useAuthStore } from './auth'
 
 /** Marker skins — colored gradient + matching blurred halo. */
 const SKINS = {
@@ -186,6 +187,18 @@ export const useMapStore = defineStore('map', () => {
     }
   }
 
+  // Realtime: a story someone just posted → drop it on the map instantly (skip my own).
+  function receiveStory(row) {
+    if (!row?.id || stories.value.some((s) => s.id === row.id)) return
+    const me = useAuthStore().user
+    if (me) {
+      // My own story isn't a nearby marker (I'm the YOU marker); publish()+load() handle it.
+      if (row.ownerProfileId && row.ownerProfileId === me.profileId) return
+      if (row.nickname && me.nickname && row.nickname.toLowerCase() === me.nickname.toLowerCase()) return
+    }
+    stories.value = [mapServerStory(row, stories.value.length), ...stories.value]
+  }
+
   // Publish a story from the post-story sheet.
   async function publishStory(form) {
     try {
@@ -224,5 +237,6 @@ export const useMapStore = defineStore('map', () => {
     hideStory,
     load,
     publishStory,
+    receiveStory,
   }
 })

@@ -45,6 +45,7 @@ function mapResponse(row, requestId, index) {
     time: shortDate(row.created_at) || 'just now',
     message: row.message || '',
     status: row.status,
+    conversationId: row.conversation_id || null,
     gradient: REPLY_SKINS[index % REPLY_SKINS.length],
   }
 }
@@ -308,6 +309,7 @@ export const useRequestsStore = defineStore('requests', () => {
       time: 'just now',
       message: resp.message || '',
       status: resp.status === 'declined' ? 'declined' : resp.status || 'new',
+      conversationId: resp.conversation_id || null,
       gradient: REPLY_SKINS[responses.value.length % REPLY_SKINS.length],
     })
   }

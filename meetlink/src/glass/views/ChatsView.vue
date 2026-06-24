@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Search, ChevronLeft, MoreHorizontal, Plus, ArrowUp, MessageSquare, MapPin, Link2 } from '@lucide/vue'
+import { Search, ChevronLeft, MoreHorizontal, Plus, ArrowUp, MessageSquare, MapPin, Link2, Mail } from '@lucide/vue'
 import { useChatsStore } from '../stores/chats'
 import { useUiStore } from '../stores/ui'
 
@@ -61,6 +61,13 @@ const lastStatus = computed(() => {
 
 function open(conversation) {
   chats.selectChat(conversation.id)
+}
+
+async function copyConvContact() {
+  const c = chats.activeConversation?.contact
+  if (!c) return
+  const ok = await ui.copyText(c)
+  ui.showToast(ok ? 'Contact copied' : c)
 }
 
 // Auto-scroll the message list to the newest message.
@@ -190,6 +197,15 @@ function menuAction(kind) {
             <Link2 v-else :size="12" />
             {{ sourceText }}
           </div>
+          <button
+            v-if="chats.activeConversation.contact"
+            type="button"
+            class="contact-pill"
+            title="Copy contact"
+            @click="copyConvContact"
+          >
+            <Mail :size="13" /> {{ chats.activeConversation.contact }}
+          </button>
           <div
             v-for="m in chats.activeConversation.messages"
             :key="m.id"
@@ -546,6 +562,25 @@ function menuAction(kind) {
 }
 .source-pill svg {
   color: var(--ml-accent-ink);
+}
+.contact-pill {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(139, 124, 246, 0.4);
+  background: rgba(139, 124, 246, 0.08);
+  color: var(--ml-accent-ink);
+  font-family: var(--ml-font-display);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.contact-pill:hover {
+  background: rgba(139, 124, 246, 0.16);
 }
 .msg-row {
   display: flex;

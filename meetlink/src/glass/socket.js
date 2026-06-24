@@ -2,6 +2,7 @@ import { io } from 'socket.io-client'
 import { OWNER_NICKNAME } from './api'
 import { useChatsStore } from './stores/chats'
 import { useRequestsStore } from './stores/requests'
+import { useMapStore } from './stores/map'
 
 // Realtime via socket.io. Connects to the same origin; Vite proxies /socket.io → :4000 (ws).
 let socket = null
@@ -18,6 +19,7 @@ export function connectSocket(nickname) {
   socket.on('messages:message', (payload) => useChatsStore().receiveMessage(payload))
   socket.on('messages:conversation', (row) => useChatsStore().receiveConversation(row))
   socket.on('requests:response', (payload) => useRequestsStore().receiveResponse(payload))
+  socket.on('stories:new', (story) => useMapStore().receiveStory(story))
 
   return socket
 }

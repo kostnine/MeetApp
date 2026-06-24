@@ -5,11 +5,13 @@ import { Plus, MessageSquare, ChevronLeft, Mail, Link2, Check } from '@lucide/vu
 import { useRequestsStore } from '../stores/requests'
 import { useMeStore } from '../stores/me'
 import { useUiStore } from '../stores/ui'
+import { useChatsStore } from '../stores/chats'
 import QrImage from '../components/QrImage.vue'
 
 const requests = useRequestsStore()
 const me = useMeStore()
 const ui = useUiStore()
+const chats = useChatsStore()
 const router = useRouter()
 
 const ANON_GRADIENT = 'linear-gradient(135deg,#b9b2d6,#8d85ad)'
@@ -85,17 +87,24 @@ async function share(code) {
 
 function startChat(response) {
   requests.acceptResponse(response)
-  ui.showToast('Chat started — Chats coming next')
+  chats.startFromRequest(response)
+  router.push('/chats')
 }
-function saveContact() {
-  ui.showToast('Contact saved')
+async function copyContact(response) {
+  if (!response?.contact) {
+    ui.showToast('No contact was left')
+    return
+  }
+  const ok = await ui.copyText(response.contact)
+  ui.showToast(ok ? 'Contact copied' : response.contact)
 }
 function archive(response) {
   requests.archiveResponse(response)
   ui.showToast('Archived')
 }
-function openChat() {
-  ui.showToast('Opening chat — Chats coming next')
+function openChat(response) {
+  chats.startFromRequest(response)
+  router.push('/chats')
 }
 function previewPublic() {
   router.push(`/r/${requests.generated.code}`)
@@ -195,17 +204,26 @@ async function copyGenerated() {
                     >{{ replyBadge(r).text }}</span
                   >
                 </div>
-                <div class="reply-contact">{{ r.contact }} · {{ r.time }}</div>
+                <button
+                  v-if="r.contact"
+                  type="button"
+                  class="reply-contact reply-contact--btn"
+                  title="Copy contact"
+                  @click="copyContact(r)"
+                >
+                  <Mail :size="12" /> {{ r.contact }} · {{ r.time }}
+                </button>
+                <div v-else class="reply-contact">No contact left · {{ r.time }}</div>
               </div>
             </div>
             <p class="reply-message">{{ r.message }}</p>
             <div class="reply-actions">
               <template v-if="r.status === 'new'">
                 <button type="button" class="btn btn--primary" @click="startChat(r)">Start chat</button>
-                <button type="button" class="btn btn--glass" @click="saveContact()">Save contact</button>
+                <button type="button" class="btn btn--glass" @click="copyContact(r)">Copy contact</button>
                 <button type="button" class="btn btn--ghost" @click="archive(r)">Archive</button>
               </template>
-              <button v-else type="button" class="btn btn--outline" @click="openChat()">Open chat</button>
+              <button v-else type="button" class="btn btn--outline" @click="openChat(r)">Open chat</button>
             </div>
           </article>
         </div>
@@ -597,6 +615,21 @@ async function copyGenerated() {
   color: var(--ml-eyebrow);
   font-weight: 700;
   margin-top: 3px;
+}
+.reply-contact--btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: rgba(139, 124, 246, 0.1);
+  color: var(--ml-accent-ink);
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  font-family: var(--ml-font-body);
+}
+.reply-contact--btn:hover {
+  background: rgba(139, 124, 246, 0.18);
 }
 .reply-message {
   margin: 11px 0 0;
