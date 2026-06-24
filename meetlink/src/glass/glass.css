@@ -200,6 +200,7 @@ body {
   border-radius: 999px;
   border: 1px solid rgba(236, 127, 182, 0.45);
   animation: mlPulse 3s ease-out infinite;
+  pointer-events: none; /* the radar ring must not steal taps from nearby story markers */
 }
 .lf-you__dot {
   position: absolute;
@@ -246,6 +247,7 @@ body {
   transform: translate(-50%, -50%);
   border-radius: 999px;
   filter: blur(9px);
+  pointer-events: none; /* only the avatar is tappable — the blurred halo must not steal taps */
 }
 .lf-story__av {
   position: relative;
