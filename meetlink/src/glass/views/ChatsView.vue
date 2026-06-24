@@ -137,8 +137,10 @@ function menuAction(kind) {
           :class="{ 'chat-row--active': c.id === chats.activeId }"
           @click="open(c)"
         >
-          <div class="row-avatar" :style="{ background: c.gradient }">
-            {{ c.mono }}<span v-if="c.online" class="row-online" />
+          <div class="row-avatar" :style="c.avatar ? null : { background: c.gradient }">
+            <img v-if="c.avatar" :src="c.avatar" alt="" class="av-img" />
+            <span v-else>{{ c.mono }}</span>
+            <span v-if="c.online" class="row-online" />
           </div>
           <div class="row-body">
             <div class="row-name-line">
@@ -166,8 +168,12 @@ function menuAction(kind) {
           >
             <ChevronLeft :size="20" />
           </button>
-          <div class="detail-avatar" :style="{ background: chats.activeConversation.gradient }">
-            {{ chats.activeConversation.mono }}
+          <div
+            class="detail-avatar"
+            :style="chats.activeConversation.avatar ? null : { background: chats.activeConversation.gradient }"
+          >
+            <img v-if="chats.activeConversation.avatar" :src="chats.activeConversation.avatar" alt="" class="av-img" />
+            <span v-else>{{ chats.activeConversation.mono }}</span>
           </div>
           <div class="detail-id">
             <div class="detail-name">{{ chats.activeConversation.name }}</div>
@@ -222,8 +228,12 @@ function menuAction(kind) {
               </div>
               <div class="reply-q">
                 <span class="reply-q-bar" :style="{ background: m.replyStory.mine ? '#8b7cf6' : '#ec7fb6' }" />
-                <div class="reply-q-thumb" :style="{ background: m.replyStory.gradient || 'rgba(139,124,246,.2)' }">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
+                <div
+                  class="reply-q-thumb"
+                  :style="m.replyStory.image ? null : { background: m.replyStory.gradient || 'rgba(139,124,246,.2)' }"
+                >
+                  <img v-if="m.replyStory.image" :src="m.replyStory.image" alt="" class="reply-q-thumb-img" />
+                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="rgba(255,255,255,.85)" stroke-width="2"/><circle cx="8.5" cy="10" r="1.5" stroke="rgba(255,255,255,.85)" stroke-width="2"/><path d="M4 17l5-4 4 3 3-2 4 3" stroke="rgba(255,255,255,.85)" stroke-width="2" stroke-linejoin="round"/></svg>
                 </div>
                 <div class="reply-q-text">{{ m.replyStory.snippet }}</div>
               </div>
@@ -378,6 +388,13 @@ function menuAction(kind) {
   color: #fff;
   font-family: var(--ml-font-display);
   font-weight: 700;
+}
+/* Real profile photo fills the avatar square (rounded to match), online dot stays outside. */
+.av-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 .row-avatar {
   width: 48px;
@@ -636,12 +653,19 @@ function menuAction(kind) {
 }
 .reply-q-thumb {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.reply-q-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .reply-q-text {
   align-self: center;

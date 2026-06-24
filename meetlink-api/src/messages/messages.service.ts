@@ -79,8 +79,10 @@ export class MessagesService {
          op.nickname as owner_nickname,
          op.name as owner_name,
          op.status as owner_status,
+         op.avatar_url as owner_avatar,
          gp.name as guest_name,
          gp.status as guest_status,
+         gp.avatar_url as guest_avatar,
          last_message.body as last_message,
          last_message.sender as last_sender,
          last_message.created_at as last_message_at,
@@ -119,7 +121,8 @@ export class MessagesService {
 
     const conversationResult = await this.db.query(
       `select c.*, op.nickname as owner_nickname, op.name as owner_name, op.status as owner_status,
-              gp.name as guest_name, gp.status as guest_status
+              op.avatar_url as owner_avatar, gp.name as guest_name, gp.status as guest_status,
+              gp.avatar_url as guest_avatar
        from conversations c
        join profiles op on op.id = c.owner_profile_id
        left join profiles gp on gp.id = c.guest_profile_id

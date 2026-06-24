@@ -37,8 +37,16 @@ function viewerSide(row) {
 // The OTHER person (name + online), from the viewer's perspective.
 function counterpart(row, side) {
   return side === 'owner'
-    ? { name: row.guest_name || row.guest_nickname || 'Someone', online: row.guest_status === 'online' }
-    : { name: row.owner_name || row.owner_nickname || 'Someone', online: row.owner_status === 'online' }
+    ? {
+        name: row.guest_name || row.guest_nickname || 'Someone',
+        online: row.guest_status === 'online',
+        avatar: row.guest_avatar || '',
+      }
+    : {
+        name: row.owner_name || row.owner_nickname || 'Someone',
+        online: row.owner_status === 'online',
+        avatar: row.owner_avatar || '',
+      }
 }
 
 // My / the other person's last-read timestamps, from the viewer's perspective.
@@ -68,6 +76,7 @@ function mapConversation(row, index) {
     otherRead,
     name: other.name,
     mono: mono(other.name),
+    avatar: other.avatar,
     gradient: SKIN_LIST[index % SKIN_LIST.length],
     online: other.online,
     source: mapSource(row.source),
@@ -401,6 +410,7 @@ export const useChatsStore = defineStore('chats', () => {
       otherRead,
       name: other.name,
       mono: mono(other.name),
+      avatar: other.avatar,
       gradient: SKIN_LIST[conversations.value.length % SKIN_LIST.length],
       online: other.online,
       source: mapSource(row.source),
@@ -437,7 +447,13 @@ export const useChatsStore = defineStore('chats', () => {
     // The story this chat answers → shown as a quoted-story block in the thread.
     const replyStory =
       story && (story.text || story.image)
-        ? { name: story.name, snippet: story.text || 'Photo story', gradient: story.gradient || '', mine: true }
+        ? {
+            name: story.name,
+            snippet: story.text || 'Photo story',
+            gradient: story.gradient || '',
+            image: story.image || null, // the actual story photo, shown in the quote
+            mine: true,
+          }
         : null
     // conversation.replyStory → drives the short centered context pill (persists);
     // conversation.pendingReplyStory → consumed by the next sendMessage to mark the reply
@@ -459,6 +475,7 @@ export const useChatsStore = defineStore('chats', () => {
       name: story.name,
       nickname: story.nickname || story.name,
       mono: mono(story.name),
+      avatar: story.avatar || '',
       gradient: story.gradient,
       online: !!story.online,
       source: 'story',
